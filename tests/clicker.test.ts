@@ -260,6 +260,99 @@ describe("Humor bubble stage clamping (screenshot-review fix)", () => {
   });
 });
 
+describe("Humor bubble word-wrap (fit text horizontally)", () => {
+  // Stub ctx mirrors main_scene.test.ts: measureText ~7px per char.
+  function stub_ctx(): CanvasRenderingContext2D {
+    const ctx = {
+      measureText: (s: string) => ({ width: String(s).length * 7 }),
+    };
+    return ctx as unknown as CanvasRenderingContext2D;
+  }
+
+  it("keeps a short line on a single row", () => {
+    const clicker = new Clicker();
+    const lines = clicker._wrap_lines(stub_ctx(), "short line", 200);
+    expect(1).toEqual(lines.length);
+    expect("short line").toEqual(lines[0]);
+  });
+
+  it("wraps words so every row fits the inner width", () => {
+    const clicker = new Clicker();
+    const text = "alpha beta gamma delta epsilon zeta";
+    const lines = clicker._wrap_lines(stub_ctx(), text, 70);
+    expect(lines.length > 1).toBe(true);
+    for (const line of lines) {
+      expect(line.length * 7 <= 70).toBe(true);
+    }
+    expect(lines.join(" ")).toEqual(text);
+  });
+
+  it("an over-long single word still gets its own row", () => {
+    const clicker = new Clicker();
+    const lines = clicker._wrap_lines(stub_ctx(), "tiny supercalifragilistic word", 40);
+    expect(lines.length >= 3).toBe(true);
+    expect(lines.join(" ")).toEqual("tiny supercalifragilistic word");
+  });
+});
+
+describe("Monster sprite draw lane", () => {
+  it("falls back to the colored rect when no DOM canvas is available", () => {
+    const clicker = new Clicker();
+    clicker.humor_visible = false;
+    const calls: string[] = [];
+    const ctx = {
+      calls,
+      save: () => calls.push("save"),
+      restore: () => calls.push("restore"),
+      translate: () => {},
+      fillRect: () => calls.push("fillRect"),
+      drawImage: () => calls.push("drawImage"),
+      fillText: () => {},
+      measureText: (s: string) => ({ width: String(s).length * 7 }),
+    } as unknown as CanvasRenderingContext2D;
+    clicker.draw(ctx);
+    expect(calls.includes("fillRect")).toBe(true); // rect fallback
+    expect(calls.includes("drawImage")).toBe(false);
+  });
+
+  it("draws the pixel-art sprite via drawImage when a DOM canvas exists", () => {
+    const clicker = new Clicker();
+    clicker.humor_visible = false;
+    const calls: string[] = [];
+    const inner_ctx = {
+      imageSmoothingEnabled: false,
+      putImageData: () => {},
+      drawImage: () => {},
+    };
+    const canvas_stub = { width: 0, height: 0, getContext: () => inner_ctx };
+    const doc = { createElement: () => canvas_stub };
+    const g = globalThis as { document?: unknown; ImageData?: unknown };
+    const prev_doc = g.document;
+    const prev_id = g.ImageData;
+    g.document = doc;
+    g.ImageData = class {
+      constructor(_d: unknown, _w: number, _h: number) {}
+    };
+    const ctx = {
+      save: () => {},
+      restore: () => {},
+      translate: () => {},
+      fillRect: () => calls.push("fillRect"),
+      drawImage: () => calls.push("drawImage"),
+      fillText: () => {},
+      measureText: (s: string) => ({ width: String(s).length * 7 }),
+    } as unknown as CanvasRenderingContext2D;
+    try {
+      clicker.draw(ctx);
+    } finally {
+      g.document = prev_doc;
+      g.ImageData = prev_id;
+    }
+    expect(calls.includes("drawImage")).toBe(true);
+    expect(calls.includes("fillRect")).toBe(false);
+  });
+});
+
 describe("get_kill_progress (FEEL-01/02 pure helper)", () => {
   const ALL_UNLOCKED: Record<string, true> = {
     "Spreadsheet Skeleton": true,

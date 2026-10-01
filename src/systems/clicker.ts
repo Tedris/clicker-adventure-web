@@ -5,6 +5,7 @@
 
 import Config from "../config";
 import Format from "../format";
+import { createSpriteCanvas } from "../pixelart";
 import type { GameState } from "../state";
 import Prestige from "./prestige";
 import Stats from "./stats";
@@ -617,16 +618,36 @@ export class Clicker {
     const scale_x = 1.0 - this.compression_amount;
     const scale_y = 1.0 + this.compression_amount * 0.5;
 
-    // Monster: colored rectangle with fade; the pixel-art sprite lookup of
-    // the LÖVE build is replaced by the plain canvas rect here.
-    const mc = this.current_monster ? this.current_monster.color : Config.POP_COLOR_WHITE;
-    ctx.fillStyle = rgba(mc, (mc[3] / 255) * this.fade_alpha);
-    ctx.fillRect(
-      cx - (S * scale_x) / 2,
-      cy - (S * scale_y) / 2,
-      S * scale_x,
-      S * scale_y,
-    );
+    // Monster: pixel-art sprite scaled to MONSTER_SIZE with the fade alpha
+    // (mirrors PixelArt.get_image in clicker.lua); falls back to the legacy
+    // colored rectangle when there is no DOM canvas (pure-data test runs).
+    const sprite = this.current_monster
+      ? createSpriteCanvas(
+          this.current_monster.sprite_key,
+          Math.round(Config.MONSTER_SIZE / Config.SPRITE_PIXEL_SIZE),
+        )
+      : undefined;
+    if (sprite && ctx.drawImage) {
+      ctx.imageSmoothingEnabled = false;
+      ctx.globalAlpha = Math.max(0, Math.min(1, this.fade_alpha));
+      ctx.drawImage(
+        sprite,
+        cx - (S * scale_x) / 2,
+        cy - (S * scale_y) / 2,
+        S * scale_x,
+        S * scale_y,
+      );
+      ctx.globalAlpha = 1;
+    } else {
+      const mc = this.current_monster ? this.current_monster.color : Config.POP_COLOR_WHITE;
+      ctx.fillStyle = rgba(mc, (mc[3] / 255) * this.fade_alpha);
+      ctx.fillRect(
+        cx - (S * scale_x) / 2,
+        cy - (S * scale_y) / 2,
+        S * scale_x,
+        S * scale_y,
+      );
+    }
 
     // Hit flash overlay
     if (this.hit_flash_timer > 0) {
@@ -667,10 +688,13 @@ export class Clicker {
     let bubble_width = Math.max(120, text.length * 7 + padding * 2 + 30);
     let [bubble_x, w] = this._clamp_bubble(x, bubble_width, stage);
     bubble_width = w;
-    // Clamped bubbles wrap; grow the body with the line count.
+    // Measure with the real font first, then wrap to the inner width so the
+    // text always fits horizontally inside the bubble; the body grows with
+    // the real line count.
+    ctx.font = `${Config.FONT_SIZE}px sans-serif`;
     const inner = Math.max(40, bubble_width - padding * 2);
-    const lines = Math.max(1, Math.ceil((text.length * 7) / inner));
-    const bubble_height = 12 + lines * 13;
+    const lines = this._wrap_lines(ctx, text, inner);
+    const bubble_height = 12 + lines.length * 13;
     const bubble_y = y - bubble_height;
 
     // Bubble body
@@ -689,11 +713,32 @@ export class Clicker {
     ctx.closePath();
     ctx.fill();
 
-    // Text (single centered line; canvas fillText does not wrap)
+    // Text: centered rows, one per wrapped line, top-down inside the body.
     ctx.fillStyle = rgba([0, 0, 0], 0.86);
-    ctx.font = `${Config.FONT_SIZE}px sans-serif`;
     ctx.textAlign = "center";
-    ctx.fillText(text, bubble_x + bubble_width / 2, bubble_y + bubble_height / 2 + Config.FONT_SIZE / 3);
+    ctx.textBaseline = "top";
+    for (let i = 0; i < lines.length; i++) {
+      ctx.fillText(lines[i], bubble_x + bubble_width / 2, bubble_y + 6 + i * 13);
+    }
+  }
+
+  // Greedy word wrap against a measured max width. Mirrors love's
+  // graphics.printf wrapping: a word longer than the width gets its own row.
+  _wrap_lines(ctx: CanvasRenderingContext2D, text: string, max_w: number): string[] {
+    const words = text.split(" ");
+    const lines: string[] = [];
+    let cur = "";
+    for (const word of words) {
+      const cand = cur === "" ? word : cur + " " + word;
+      if (cur === "" || ctx.measureText(cand).width <= max_w) {
+        cur = cand;
+      } else {
+        lines.push(cur);
+        cur = word;
+      }
+    }
+    if (cur !== "") lines.push(cur);
+    return lines.length > 0 ? lines : [""];
   }
 
   private _draw_pop(ctx: CanvasRenderingContext2D, pop: NumberPop): void {
