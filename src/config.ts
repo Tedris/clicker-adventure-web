@@ -1,0 +1,399 @@
+// src/config.ts
+// All constants and balancing values, ported from the LÖVE2D project's src/config.lua.
+
+export interface Rarity {
+  key: string;
+  name: string;
+  stars: string;
+  weight: number;
+  bonus_mult: number;
+  color: readonly [number, number, number, number];
+}
+
+export const Config = {
+  // Game viewport (design size; layout clamps down to LAYOUT_MIN_*)
+  WINDOW_WIDTH: 800,
+  WINDOW_HEIGHT: 600,
+  DEBUG_MODE: false,
+  FONT_SIZE: 11,
+
+  // Number display (K/M/B... suffix ladder, powers of 1000 from K upward).
+  NUMBER_SUFFIXES: ["K", "M", "B", "T", "Qa", "Qi"],
+
+  // Click mechanics
+  BASE_CLICK_VALUE: 1,
+  EXP_PER_CLICK: 1,
+  CRIT_CHANCE: 5, // base percent; Crit Chance upgrade adds +2%/level on top
+  CRIT_MULTIPLIER: 2,
+  TOKEN_PER_CLICK: 1,
+
+  // Monster
+  MONSTER_SIZE: 32,
+  SPRITE_PIXEL_SIZE: 16,
+  MONSTER_IDLE_AMPLITUDE: 4,
+  MONSTER_IDLE_CYCLE: 1.0,
+  MONSTER_FADE_DURATION: 0.3,
+  // Clicks landing during the death-fade window are queued and paid on respawn.
+  CLICK_BUFFER_CAPACITY: 2,
+  MONSTER_COMPRESS_DURATION: 0.1,
+  MONSTER_REBOUND_DURATION: 0.2,
+  HUMOR_BUBBLE_LIFETIME: 3.0,
+
+  // Crit effects
+  CRIT_FLASH_DURATION: 0.15,
+  SCREEN_SHAKE_DURATION: 0.05,
+  SCREEN_SHAKE_AMOUNT: 2,
+  SCREEN_SHAKE_FRAMES: 3,
+
+  // Number pops
+  POP_NORMAL_LIFE: 0.8,
+  POP_CRIT_LIFE: 1.0,
+  POP_NORMAL_FLOAT: 40,
+  POP_CRIT_FLOAT: 60,
+  POP_GAP: 4,
+  POP_NORMAL_SIZE: 12,
+  POP_CRIT_SIZE: 16,
+  POP_COLOR_GOLD: [255, 200, 50, 255],
+  POP_COLOR_EXP: [50, 200, 255, 255],
+  POP_COLOR_TOKEN: [26, 188, 156, 255],
+  POP_COLOR_CRIT_GOLD: [255, 215, 0, 255],
+  POP_COLOR_WHITE: [255, 255, 255, 255],
+  POP_TOKEN_LIFE: 0.6,
+  POP_TOKEN_FLOAT: 30,
+  POP_TOKEN_SIZE: 10,
+
+  // Passive generation (Phase B rebalance: rates raised so idle income is a
+  // meaningful pillar by ~10 min).
+  PASSIVE_GOLD_RATE: 4,
+  PASSIVE_EXP_RATE: 1,
+  PASSIVE_TOKEN_RATE: 1,
+  PASSIVE_UNLOCK_COST: 50,
+
+  OFFLINE_TOKEN_CAP_SECONDS: 28800,
+  OFFLINE_SKIP_SECONDS: 60,
+
+  // Cold-boot combined boot-reward cap, in units of the first upgrade
+  // track's base cost so later cost retunes rescale it automatically.
+  COLD_BOOT_REWARD_CAP_MULT: 11541,
+
+  // Save system — SAVE_MIN_INTERVAL throttles the gain-triggered autosave.
+  // v3 (Phase 6): stats + achievements lifetime maps; older files are
+  // upgraded in place by the Save migrations before validation.
+  SAVE_FILENAME: "clicker-adventure-save",
+  SAVE_BACKUP_FILENAME: "clicker-adventure-save-backup",
+  SAVE_VERSION: 3,
+  SAVE_MIN_INTERVAL: 1.0,
+
+  // Max frame dt after a background/minimize gap; economy catch-up does NOT
+  // ride dt — it routes through the offline system on boot (28800s cap).
+  MAX_FRAME_DT: 0.25,
+
+  // Prestige/rebirth: points earned sub-linearly (sqrt shaping) from gold
+  // accumulated since the last rebirth; drives a gold-only multiplier
+  // derived from the point total at each gain site, never stored separately.
+  PRESTIGE_GOLD_BASE: 8000000,
+  PRESTIGE_EXPONENT: 0.5,
+  PRESTIGE_MULTIPLIER_PER_POINT: 0.01,
+
+  // Prestige panel (design MAXIMA the layout clamps against the live window).
+  PRESTIGE_BTN_WIDTH: 84,
+  PRESTIGE_PANEL_WIDTH: 380,
+  PRESTIGE_PANEL_HEIGHT: 280,
+  PRESTIGE_PANEL_LINE_HEIGHT: 14,
+
+  // Stats/achievements panel (same modal family; widths match prestige).
+  STATS_BTN_WIDTH: 64,
+  STATS_PANEL_WIDTH: 380,
+  STATS_PANEL_HEIGHT: 320,
+  STATS_PANEL_LINE_HEIGHT: 14,
+  STATS_PANEL_MASTERY_FORMAT: "%d/%d unlocked",
+
+  // On-screen toggle cluster: stage-corner toggles above the bottom bar.
+  TOGGLE_BTN_WIDTH: 40,
+  TOGGLE_BTN_HEIGHT: 24,
+
+  // Daily login streak — day boundaries are UTC (floor(now/86400)) so no
+  // timezone or DST rule can double-pay or skip a day. Day 8+ keeps the
+  // streak alive on the top tier.
+  DAILY_LOGIN_DAY_SECONDS: 86400,
+  DAILY_LOGIN_REWARDS: [2, 3, 4, 5, 6, 8, 10],
+
+  // Offline earnings popup: centered ~320px panel over a dim overlay.
+  OFFLINE_REPORT_PANEL_WIDTH: 320,
+  OFFLINE_REPORT_PANEL_HEIGHT: 190,
+  OFFLINE_REPORT_PADDING: 16,
+  OFFLINE_REPORT_LINE_HEIGHT: 20,
+  OFFLINE_REPORT_DIM_COLOR: [0, 0, 0, 178],
+  OFFLINE_REPORT_PANEL_COLOR: [26, 26, 46, 255],
+  OFFLINE_REPORT_BORDER_COLOR: [240, 200, 80, 255],
+  OFFLINE_REPORT_TITLE_COLOR: [240, 200, 80, 255],
+  OFFLINE_REPORT_TEXT_COLOR: [255, 255, 255, 255],
+  OFFLINE_REPORT_HINT_COLOR: [160, 160, 176, 255],
+
+  // HUD display
+  HUD_PANEL_HEIGHT: 48,
+  HUD_COLOR_GOLD: [240, 200, 80, 255],
+  HUD_COLOR_EXP: [155, 89, 182, 255],
+  HUD_COLOR_TOKEN: [26, 188, 156, 255],
+
+  // Background
+  BG_COLOR: [26, 26, 46, 255], // #1A1A2E
+
+  // Progression unlocks (Phase B re-spacing: beats across the first ~15 min).
+  EXP_THRESHOLD_1: 100,
+  EXP_THRESHOLD_2: 1000,
+  EXP_THRESHOLD_3: 6000,
+  UNLOCK_MESSAGE_LIFETIME: 3.0,
+  UNLOCK_MESSAGE_Y: 70,
+  UNLOCK_MESSAGE_COLOR: [255, 215, 0, 255],
+  UNLOCK_MESSAGE_SIZE: 14,
+
+  // Kill-progress meter under the monster. After the final EXP tier the same
+  // bar repurposes to purchase mode with the gold fill. Width/height are
+  // design MAXIMA the layout clamp consumes — positions stay in Layout.
+  KILL_METER_MAX_WIDTH: 240,
+  KILL_METER_HEIGHT: 10,
+  KILL_METER_TRACK_COLOR: [60, 60, 80, 255],
+  KILL_METER_FILL_COLOR: [155, 89, 182, 255],
+  KILL_METER_PURCHASE_FILL_COLOR: [240, 200, 80, 255],
+
+  // Upgrade system. Each definition in upgrades.ts hardcodes its own
+  // maxLevel — this constant is the doc value for the active rails.
+  UPGRADE_MAX_LEVEL: 100,
+  UPGRADE_CARD_HEIGHT: 80,
+  UPGRADE_CARD_GAP: 8,
+  UPGRADE_BUY_BTN_HEIGHT: 28,
+  UPGRADE_BUY_BTN_COLOR: [240, 200, 80, 255],
+  UPGRADE_DISABLED_COLOR: [108, 108, 128, 255],
+
+  // Gacha / Pity system
+  PITY_SOFT: 75,
+  PITY_HARD: 100,
+  BASE_DROP_RATE: 0.05,
+  SOFT_PITY_RATE: 0.10,
+  PULL_COST: 10,
+  WAIFU_POOL: [
+    { name: "Karen the Accountant", bonus_type: "tokens", bonus_value: 0.10 },
+    { name: "Steve the HR Rep", bonus_type: "gold", bonus_value: 0.05 },
+    { name: "Linda the Middle Manager", bonus_type: "exp", bonus_value: 0.07 },
+  ],
+
+  // Roster panel. Panel POSITION/SIZE and the grid are DERIVED from the
+  // window via layout.ts; these are card sizing and honest caps.
+  ROSTER_PANEL_WIDTH: 180, // rail width cap (design width)
+  ROSTER_CARD_SIZE: 64,
+  ROSTER_SPRITE_SIZE: 32,
+  ROSTER_GRID_COLS: 3, // max columns (layout gives fewer when they would clip)
+  ROSTER_VISIBLE_ROWS: 5,
+  ROSTER_CARD_SPACING: 8,
+  ROSTER_PANEL_PADDING: 8,
+  ROSTER_SCROLL_SPEED: 30,
+  ROSTER_LABEL_HEIGHT: 30,
+  ROSTER_HEADER_HEIGHT: 20,
+
+  // Touch input lane: tap-vs-drag tuning for the pointer machine.
+  TOUCH_DRAG_THRESHOLD_PX: 10,
+  TOUCH_SCROLL_SENSITIVITY: 1.0,
+  TOUCH_TAP_DEBOUNCE_S: 0.05,
+  TOUCH_TAP_TOLERANCE_PX: 2,
+
+  // Responsive layout core: rails shrink proportionally below the design
+  // width, never below the min; viewport clamped to the min size.
+  LAYOUT_MARGIN: 16,
+  LAYOUT_RAIL_MIN_WIDTH: 120,
+  LAYOUT_RAIL_RATIO: 0.225,
+  LAYOUT_MIN_WIDTH: 520,
+  LAYOUT_MIN_HEIGHT: 360,
+  UPGRADE_CARD_MIN_HEIGHT: 70,
+  PITY_TEXT_WIDTH: 128,
+
+  // Bottom bar
+  BOTTOM_BAR_HEIGHT: 48,
+  BOTTOM_BAR_Y: 552,
+  PULL_BTN_X: 16,
+  PULL_BTN_WIDTH: 160,
+  PULL_BTN_COLOR: [240, 200, 80, 255],
+  PULL_BTN_DISABLED_COLOR: [108, 108, 128, 255],
+  PITY_NORMAL_COLOR: [160, 160, 176, 255],
+  PITY_WARNING_COLOR: [255, 215, 0, 255],
+
+  // Failed-pull toast: failures print their pity result before the last
+  // quarter of the fade so a silent deduction doesn't read as a dead button.
+  PULL_FAIL_TOAST_LIFETIME: 2.5,
+  PULL_FAIL_TOAST_Y: 112,
+  PULL_FAIL_TOAST_COLOR: [255, 215, 0, 255],
+
+  // Event punctuation lane: a SINGLE coalesced toast lane for discrete
+  // ledger events. Re-firing resets timer+text, never stacks. The passive
+  // drip never toasts or flashes; per-click gold is popped, not flashed.
+  EVENT_TOAST_LIFETIME: 2.5,
+  EVENT_TOAST_Y: 136,
+  EVENT_TOAST_COLOR: [235, 235, 245, 255],
+  HUD_FLASH_DURATION: 0.4,
+  // Bulk-unlock coalesce suffix: one qualifying pass reads as ONE toast.
+  ACHV_TOAST_MORE_SUFFIX: " (and %d more)",
+
+  // Reset progress button, right-aligned in the bottom bar
+  RESET_BTN_WIDTH: 64,
+  RESET_BTN_MARGIN: 16,
+  RESET_BTN_COLOR: [108, 108, 128, 255],
+  RESET_ARMED_COLOR: [231, 76, 60, 255],
+
+  // Save-recovery warning toast
+  SAVE_WARNING_COLOR: [231, 76, 60, 255],
+  SAVE_WARNING_LIFETIME: 6.0,
+  SAVE_WARNING_Y: 88,
+
+  // Debug harness overlay
+  DEBUG_OVERLAY_X: 600,
+  DEBUG_OVERLAY_Y: 10,
+  DEBUG_OVERLAY_COLOR: [255, 255, 255, 200],
+  DEBUG_OVERLAY_SIZE: 11,
+
+  // Waifu system
+  WAIFU_SPRITE_SIZE: 64,
+  WAIFU_IDLE_COLOR: [196, 113, 237, 255],
+  WAIFU_HAPPY_COLOR: [46, 204, 113, 255],
+  WAIFU_DISAPPOINTED_COLOR: [108, 108, 128, 255],
+  WAIFU_REACTION_COLOR: [255, 107, 157, 255],
+  WAIFU_HUMOR_LIFETIME: 4.0,
+  WAIFU_HUMOR_COLOR: [26, 188, 156, 255],
+  WAIFU_HUMOR_SIZE: 12,
+  WAIFU_HAPPY_LIFETIME: 2.0,
+  WAIFU_HAPPY_COLOR_DURATION: 2.0,
+
+  // Summoning animation
+  SUMMON_CIRCLE_SIZE: 200,
+  SUMMON_CIRCLE_COLOR: [76, 201, 240, 255],
+  SUMMON_PARTICLE_COLOR: [196, 200, 80, 255],
+  SUMMON_ROTATION_SPEED: 1.5,
+  SUMMON_ORBIT_DISTANCE: 120,
+  SUMMON_FADE_IN_TIME: 0.2,
+  SUMMON_PULL_BG: [15, 52, 96, 255],
+  SUMMON_PULL_BTN_WIDTH: 160,
+  SUMMON_PULL_BTN_HEIGHT: 36,
+
+  // Summoning animation effects
+  SUMMON_CIRCLE_GLOW_SIZE: 8,
+  SUMMON_CIRCLE_GLOW_ALPHA: 0.3,
+  SUMMON_CIRCLE_PULSE_SPEED: 2.0,
+  SUMMON_INNER_RING_RATIO: 0.6,
+  SUMMON_INNER_RING_COLOR: [196, 113, 237, 255],
+  SUMMON_INNER_RING_WIDTH: 2,
+  SUMMON_INNER_ROTATION_SPEED: -1.0,
+  SUMMON_PARTICLE_COUNT: 35,
+  SUMMON_PARTICLE_GRAVITY: 20,
+  SUMMON_PARTICLE_ROTATION_SPEED: 3.0,
+  SUMMON_REVEAL_SHAKE_AMOUNT: 3,
+  SUMMON_REVEAL_SHAKE_DURATION: 0.3,
+  SUMMON_REVEAL_SHAKE_FRAMES: 5,
+  SUMMON_CIRCLE_FADE_START: 0.7,
+
+  // Waifu personality: flavor lines shown on the pull-screen reveal.
+  WAIFU_PERSONALITY: {
+    "Karen the Accountant": {
+      reveal_color: [255, 107, 157, 255],
+      reveal_label: "Karen (excited~!)",
+      glow_intensity: 0.8,
+      reaction_delay: 0.1,
+      skill: "Excel Macros",
+      flavor:
+        "Keeps her feelings on a color-coded spreadsheet. Q3 feelings came in 12% over forecast.",
+    },
+    "Steve the HR Rep": {
+      reveal_color: [46, 204, 113, 255],
+      reveal_label: "Steve (nodding approvingly)",
+      glow_intensity: 0.6,
+      reaction_delay: 0.15,
+      skill: "Performance Reviews",
+      flavor:
+        "Calls every meeting 'a quick sync'. The quick syncs are never quick.",
+    },
+    "Linda the Middle Manager": {
+      reveal_color: [243, 156, 18, 255],
+      reveal_label: "Linda (synergizing~)",
+      glow_intensity: 0.7,
+      reaction_delay: 0.12,
+      skill: "Calendar Tetris",
+      flavor:
+        "Will circle back. She has always circled back. It is her entire personality.",
+    },
+  } as Record<string, WaifuPersonality>,
+
+  // Rarity ladder, rolled per successful pull (independent of which waifu
+  // dropped): weights sum to 100 so a roll is a plain cumulative walk, and
+  // bonus_mult scales the character's base bonus into the pulled instance.
+  // Stars are ASCII on purpose (parity with the LÖVE font limitation).
+  WAIFU_RARITIES: [
+    { key: "common", name: "Common", stars: "*", weight: 70, bonus_mult: 1.0, color: [176, 176, 192, 255] },
+    { key: "rare", name: "Rare", stars: "**", weight: 22, bonus_mult: 1.5, color: [91, 189, 255, 255] },
+    { key: "epic", name: "Epic", stars: "***", weight: 7, bonus_mult: 2.25, color: [185, 122, 255, 255] },
+    { key: "legendary", name: "Legendary", stars: "****", weight: 1, bonus_mult: 3.5, color: [255, 200, 60, 255] },
+  ] as readonly Rarity[],
+  WAIFU_RARITY_BY_KEY: {} as Record<string, Rarity>,
+
+  // Waifu detail overlay (status screen opened from a roster card). Layout
+  // clamps these against the live window, so they are maximums, not promises.
+  WAIFU_DETAIL_PANEL_WIDTH: 320,
+  WAIFU_DETAIL_PANEL_HEIGHT: 360,
+  WAIFU_DETAIL_SPRITE_SIZE: 96,
+  WAIFU_DETAIL_INFO_RESERVE: 110,
+
+  // Bonus phrasing per currency, shared by roster cards and pull reveals.
+  WAIFU_BONUS_LABELS: {
+    tokens: "Token Generation",
+    gold: "Gold Drops",
+    exp: "EXP Gain",
+  },
+  // 64px roster cards cannot fit those words; cards print a short suffix.
+  ROSTER_BONUS_SHORT: {
+    tokens: "Tok",
+    gold: "Gold",
+    exp: "EXP",
+  },
+
+  // The curated 15-badge achievement roster. Stable lowercase snake-case ids
+  // are the persisted state.achievements key contract — never rename casually.
+  // `metric` is one of the canonical state.stats keys (a missing stat
+  // evaluates as 0). Array order IS the deterministic iteration order.
+  ACHIEVEMENTS: [
+    { id: "first_click", label: "Clock In", metric: "clicks", goal: 1, tier: "bronze" },
+    { id: "hundred_kills", label: "Performance Review", metric: "kills", goal: 100, tier: "silver" },
+    { id: "thousand_kills", label: "Middle-Manager Massacre", metric: "kills", goal: 1000, tier: "silver" },
+    { id: "ten_k_kills", label: "Departmental Restructuring", metric: "kills", goal: 10000, tier: "gold" },
+    { id: "first_crit", label: "Spot-On Pitch", metric: "crits", goal: 1, tier: "bronze" },
+    { id: "thousand_crits", label: "Quantifiable Impact", metric: "crits", goal: 1000, tier: "silver" },
+    { id: "five_k_crits", label: "Exceeds Expectations", metric: "crits", goal: 5000, tier: "gold" },
+    { id: "first_pull", label: "First Ticket In", metric: "pulls_total", goal: 1, tier: "bronze" },
+    { id: "rare_23", label: "Rare Performance Review", metric: "pulls_rare", goal: 23, tier: "bronze" },
+    { id: "epic_7", label: "Epic Synergy Hunt", metric: "pulls_epic", goal: 7, tier: "bronze" },
+    { id: "legendary_1", label: "Legendary Corner Office", metric: "pulls_legendary", goal: 1, tier: "bronze" },
+    { id: "upgrades_500", label: "Department Overhaul", metric: "upgrades_bought", goal: 500, tier: "silver" },
+    { id: "rebirth_1", label: "New Employee Onboarding", metric: "rebirths", goal: 1, tier: "bronze" },
+    { id: "rebirth_2", label: "Onboarded Again", metric: "rebirths", goal: 2, tier: "bronze" },
+    { id: "playtime_3600", label: "Full Shift Completed", metric: "play_time", goal: 3600, tier: "gold" },
+  ],
+
+  // Tier -> one-time achievement rewards, paid once by the unlock flip-guard.
+  // Badge gold rides the prestige multiplier at the payment site; tokens don't.
+  ACHV_REWARDS: {
+    bronze: { gold: 200, tokens: 16 },
+    silver: { gold: 800, tokens: 40 },
+    gold: { gold: 3200, tokens: 96 },
+  },
+};
+
+export interface WaifuPersonality {
+  reveal_color: readonly [number, number, number, number];
+  reveal_label: string;
+  glow_intensity: number;
+  reaction_delay: number;
+  skill: string;
+  flavor: string;
+}
+
+for (const r of Config.WAIFU_RARITIES) {
+  Config.WAIFU_RARITY_BY_KEY[r.key] = r;
+}
+
+export default Config;
