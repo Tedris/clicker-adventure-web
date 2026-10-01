@@ -11,6 +11,13 @@
     </style>
   </head>
   <body>
+    <!-- GitHub Pages serves repo root: forward to the built bundle in dist/.
+         Guarded so dist/index.html itself (same template) does not re-loop. -->
+    <script>
+      if (!/(^|\/)dist\/index\.html$/.test(location.pathname)) {
+        location.replace("dist/index.html");
+      }
+    </script>
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
