@@ -24,24 +24,45 @@ export function rail_width(ww: number): number {
   return Math.min(Config.ROSTER_PANEL_WIDTH, w);
 }
 
+export interface CollapseOpts {
+  left?: boolean;
+  right?: boolean;
+}
+
+function side_rail_width(ww: number, collapsed?: boolean): number {
+  if (collapsed) return Math.min(Config.COLLAPSED_RAIL_WIDTH, rail_width(ww));
+  return rail_width(ww);
+}
+
 // Top-level zones: hud (window-relative), bottom bar, two content rails, and
 // the stage between the rails (monster lives here; session stats center here).
-export function zones(ww: number, wh: number) {
+// A collapsed rail shrinks to COLLAPSED_RAIL_WIDTH and the stage absorbs the
+// freed width, Clicker Heroes style.
+export function zones(ww: number, wh: number, collapsed?: CollapseOpts) {
   const margin = Config.LAYOUT_MARGIN;
   const hud_h = Config.HUD_PANEL_HEIGHT;
   const bar_h = Config.BOTTOM_BAR_HEIGHT;
   const content_top = margin + hud_h + margin;
   const rail_h = Math.max(0, (wh - bar_h) - content_top);
-  const rw = rail_width(ww);
+  const rw_l = side_rail_width(ww, collapsed?.left);
+  const rw_r = side_rail_width(ww, collapsed?.right);
   return {
     margin,
     content_top,
     hud: { x: margin, y: margin, w: ww - margin * 2, h: hud_h },
     bar: { x: 0, y: wh - bar_h, w: ww, h: bar_h },
-    rail_l: { x: margin, y: content_top, w: rw, h: rail_h },
-    rail_r: { x: ww - rw - margin, y: content_top, w: rw, h: rail_h },
-    stage: { x: margin + rw, y: content_top, w: ww - (margin + rw) * 2, h: rail_h },
+    rail_l: { x: margin, y: content_top, w: rw_l, h: rail_h },
+    rail_r: { x: ww - rw_r - margin, y: content_top, w: rw_r, h: rail_h },
+    stage: { x: margin + rw_l, y: content_top, w: ww - margin * 2 - rw_l - rw_r, h: rail_h },
   };
+}
+
+// Chevron tab for a rail: the rail's top-inner corner. Same rect feeds the
+// tab draw and its hit-test.
+export function rail_tab(rail: Rect, side: "left" | "right"): Rect {
+  const s = Config.RAIL_TAB_SIZE;
+  const x = side === "left" ? rail.x + rail.w - s : rail.x;
+  return { x, y: rail.y, w: s, h: s };
 }
 
 // Bottom-bar items, all window-derived: pull (left), pity (reads as the
@@ -49,8 +70,8 @@ export function zones(ww: number, wh: number) {
 // prestige), prestige (PREST-02 entry, left of reset), reset (right edge).
 // The sess/dbg toggles sit above the bar row in the lower-right stage corner
 // (Phase 15 INP-04). The same rects feed both drawing and hit-testing.
-export function bar_items(ww: number, wh: number) {
-  const z = zones(ww, wh);
+export function bar_items(ww: number, wh: number, collapsed?: CollapseOpts) {
+  const z = zones(ww, wh, collapsed);
   const bar = z.bar;
   const pull_w = Math.min(Config.PULL_BTN_WIDTH, Math.floor(ww * 0.3));
   const pity_x = Config.PULL_BTN_X + pull_w + 12;
@@ -156,8 +177,8 @@ export function stats_panel(ww: number, wh: number, count?: number) {
 
 // Session-stats overlay: centered on the stage so it can never sit on top of
 // the roster rail (the classic 4.x-era overlap bug).
-export function stats_rect(ww: number, wh: number): Rect {
-  const stage = zones(ww, wh).stage;
+export function stats_rect(ww: number, wh: number, collapsed?: CollapseOpts): Rect {
+  const stage = zones(ww, wh, collapsed).stage;
   // 216 fits the full 8-line readout (stats + streak/pity, Story polish).
   const w = 200;
   const h = 216;
@@ -169,8 +190,8 @@ export function stats_rect(ww: number, wh: number): Rect {
 // clamped to 60% of the stage (capped at the design max), y sits below the
 // monster's rest position at the stage centre, clamped so it never reaches
 // the bottom bar.
-export function meter_rect(ww: number, wh: number): Rect {
-  const z = zones(ww, wh);
+export function meter_rect(ww: number, wh: number, collapsed?: CollapseOpts): Rect {
+  const z = zones(ww, wh, collapsed);
   const stage = z.stage;
   const w = Math.min(Config.KILL_METER_MAX_WIDTH, Math.floor(stage.w * 0.6));
   const h = Config.KILL_METER_HEIGHT;
@@ -298,6 +319,7 @@ export function waifu_detail(ww: number, wh: number) {
 
 const Layout = {
   rail_width,
+  rail_tab,
   zones,
   bar_items,
   prestige_panel,

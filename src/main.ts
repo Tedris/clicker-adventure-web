@@ -7,8 +7,9 @@ import { fit_viewport } from "./viewport";
 import Game from "./game";
 
 const canvas = document.createElement("canvas");
-const app = document.getElementById("app");
-if (!app) throw new Error("missing #app mount point");
+const mount = document.getElementById("app");
+if (!mount) throw new Error("missing #app mount point");
+const app: HTMLElement = mount; // narrowed once; closures see non-null
 app.appendChild(canvas);
 const ctx = canvas.getContext("2d")!; // narrowed once; closures see non-null
 if (!ctx) throw new Error("canvas 2d context unavailable");

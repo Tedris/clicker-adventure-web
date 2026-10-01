@@ -432,6 +432,62 @@ describe("Layout.bar_items stats entry (Phase 8)", () => {
   });
 });
 
+// Collapsible rails (Clicker Heroes pattern): collapsed sides shrink to the
+// strip width, the stage absorbs the freed space, and containment/order hold
+// for every collapse combination.
+describe("Layout collapsible rails", () => {
+  const combos: Array<[{ left?: boolean; right?: boolean }, string]> = [
+    [{}, "both expanded"],
+    [{ left: true }, "left collapsed"],
+    [{ right: true }, "right collapsed"],
+    [{ left: true, right: true }, "both collapsed"],
+  ];
+
+  it("collapsed rails use the strip width and the stage absorbs the freed space", () => {
+    const open = Layout.zones(800, 600);
+    const lc = Layout.zones(800, 600, { left: true });
+    expect(Config.COLLAPSED_RAIL_WIDTH).toEqual(lc.rail_l.w);
+    expect(open.rail_r.x).toEqual(open.rail_r.x); // right rail untouched by left collapse
+    expect(lc.stage.w > open.stage.w).toBe(true); // stage grew
+    expect(lc.stage.x).toEqual(lc.rail_l.x + lc.rail_l.w);
+    const both = Layout.zones(800, 600, { left: true, right: true });
+    expect(both.stage.w > lc.stage.w).toBe(true);
+  });
+
+  it("every collapse combo keeps rails, stage and bar contained and ordered", () => {
+    for (const [ww, wh] of SIZES) {
+      for (const [opts] of combos) {
+        const z = Layout.zones(ww, wh, opts);
+        expect(within(z.rail_l, ww, wh)).toBe(true); // rail_l escapes
+        expect(within(z.rail_r, ww, wh)).toBe(true); // rail_r escapes
+        expect(within(z.stage, ww, wh)).toBe(true); // stage escapes
+        expect(z.rail_l.x + z.rail_l.w <= z.stage.x + 0.001).toBe(true); // l/stage
+        expect(z.stage.x + z.stage.w <= z.rail_r.x + 0.001).toBe(true); // stage/r
+        expect(z.stage.x + z.stage.w <= z.rail_r.x + 0.001).toBe(true);
+        expect(z.stage.w >= 0).toBe(true); // negative stage
+      }
+    }
+  });
+
+  it("rail_tab sits in the rail's top-inner corner at the config size", () => {
+    const z = Layout.zones(800, 600);
+    const lt = Layout.rail_tab(z.rail_l, "left");
+    const rt = Layout.rail_tab(z.rail_r, "right");
+    expect(Config.RAIL_TAB_SIZE).toEqual(lt.w);
+    expect(Config.RAIL_TAB_SIZE).toEqual(lt.h);
+    expect(lt.x + lt.w).toEqual(z.rail_l.x + z.rail_l.w); // left tab hugs inner edge
+    expect(rt.x).toEqual(z.rail_r.x); // right tab hugs inner edge
+    expect(lt.y).toEqual(z.rail_l.y);
+    expect(within(lt, 800, 600)).toBe(true);
+    expect(within(rt, 800, 600)).toBe(true);
+    // a collapsed rail keeps its tab inside the strip
+    const lc = Layout.zones(800, 600, { left: true });
+    const lct = Layout.rail_tab(lc.rail_l, "left");
+    expect(lct.x >= lc.rail_l.x).toBe(true);
+    expect(lct.x + lct.w <= lc.rail_l.x + lc.rail_l.w + 0.001).toBe(true);
+  });
+});
+
 // Phase 15 (DISP-01): pure-function geometry sweep at phone aspect. Every
 // predicate mirrors the UI-SPEC acceptance list (E1-E4, E10); within() + the
 // house sweep style stays the containment authority.

@@ -177,3 +177,43 @@ describe("MainScene toasts, modals and input lanes", () => {
     expect(scene.show_session_stats).toBe(false);
   });
 });
+
+describe("MainScene rail collapse tabs", () => {
+  function tab_center(side: "left" | "right", collapsed: { left?: boolean; right?: boolean }): [number, number] {
+    const z = Layout.zones(Config.WINDOW_WIDTH, Config.WINDOW_HEIGHT, collapsed);
+    const t = Layout.rail_tab(side === "left" ? z.rail_l : z.rail_r, side);
+    return [t.x + t.w / 2, t.y + t.h / 2];
+  }
+
+  it("a chevron tap collapses its rail and a second tap expands it", () => {
+    const scene = make_scene(createState());
+    scene.load(createState());
+    let [x, y] = tab_center("left", {});
+    scene.mousepressed(x, y);
+    expect(scene.left_collapsed).toBe(true);
+    expect(scene.right_collapsed).toBe(false);
+    [x, y] = tab_center("left", { left: true });
+    scene.mousepressed(x, y);
+    expect(scene.left_collapsed).toBe(false);
+  });
+
+  it("while collapsed, any tap on the strip expands the rail", () => {
+    const scene = make_scene(createState());
+    scene.load(createState());
+    scene.right_collapsed = true;
+    const z = Layout.zones(Config.WINDOW_WIDTH, Config.WINDOW_HEIGHT, { right: true });
+    scene.mousepressed(z.rail_r.x + 4, z.rail_r.y + 120);
+    expect(scene.right_collapsed).toBe(false);
+  });
+
+  it("a tab click never falls through to the monster or the bar", () => {
+    const state = createState();
+    const scene = make_scene(state);
+    scene.load(state);
+    const gold_before = state.gold;
+    const [x, y] = tab_center("right", {});
+    const hit = scene.mousepressed(x, y);
+    expect(hit).toBe(true);
+    expect(state.gold).toEqual(gold_before);
+  });
+});

@@ -48,6 +48,8 @@ export class UpgradePanel {
   scroll_offset = 0;
   cue_pulse = 0; // FEEL-02: afford-glow pulse clock (runtime-only)
   keys: string[];
+  // Rail-collapse flag, mirrored from MainScene before geometry is read.
+  collapsed = false;
 
   constructor(upgrades: Upgrades, event_handler?: PurchaseHandler | null) {
     this.upgrades = upgrades;
@@ -61,7 +63,7 @@ export class UpgradePanel {
 
   // Live rail rect + fitted card size; clamps scroll into the overflow range.
   geometry(width: number, height: number): { rail: Rect; fit: ReturnType<typeof Layout.fit_rail> } {
-    const z = Layout.zones(width, height);
+    const z = Layout.zones(width, height, { left: this.collapsed });
     const fit = Layout.fit_rail(z.rail_l.h, this.keys.length);
     this.scroll_offset = Math.max(0, Math.min(fit.overflow, this.scroll_offset));
     return { rail: z.rail_l, fit };
@@ -74,7 +76,7 @@ export class UpgradePanel {
   }
 
   is_over_rail(x: number, y: number, width: number, height: number): boolean {
-    const rail = Layout.zones(width, height).rail_l;
+    const rail = Layout.zones(width, height, { left: this.collapsed }).rail_l;
     return x >= rail.x && x <= rail.x + rail.w && y >= rail.y && y <= rail.y + rail.h;
   }
 
@@ -162,6 +164,9 @@ export class UpgradePanel {
   on_sparkle(key: string): void { this.sparkle_animations[key] = 0.3; }
   draw(ctx: CanvasRenderingContext2D, state: GameState, width: number, height: number): void {
     const { rail, fit } = this.geometry(width, height);
+    // Collapsed: the strip + chevron tab are painted by MainScene; cards
+    // in a 28px column would only smear, so skip them here.
+    if (this.collapsed) return;
     // FEEL-02 (D-09): one target cue per frame, computed by the pure helpers
     // in systems/upgrades.ts — the UI never re-derives cost/order math.
     const cue = this._target_cue(state);

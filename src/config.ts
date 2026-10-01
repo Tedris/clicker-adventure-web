@@ -204,6 +204,10 @@ export const Config = {
   LAYOUT_RAIL_RATIO: 0.225,
   LAYOUT_MIN_WIDTH: 520,
   LAYOUT_MIN_HEIGHT: 360,
+  // Collapsible rails: a collapsed rail shrinks to this strip and the stage
+  // absorbs the freed width; the chevron tab lives in the rail's top corner.
+  COLLAPSED_RAIL_WIDTH: 28,
+  RAIL_TAB_SIZE: 24,
   UPGRADE_CARD_MIN_HEIGHT: 70,
   PITY_TEXT_WIDTH: 128,
 

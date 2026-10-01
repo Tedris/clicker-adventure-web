@@ -8,7 +8,7 @@
 
 import Config from "../config";
 import Format from "../format";
-import Layout, { type Rect, type RosterGrid } from "./layout";
+import Layout, { type CollapseOpts, type Rect, type RosterGrid } from "./layout";
 import createState from "../state";
 import { createSpriteCanvas } from "../pixelart";
 import Achievements from "../systems/achievements";
@@ -99,6 +99,10 @@ export class MainScene {
   // draw and hit-testing share one geometry source at ANY window size.
   _w: number = Config.WINDOW_WIDTH;
   _h: number = Config.WINDOW_HEIGHT;
+
+  // Rail collapse state (Clicker Heroes style). Runtime-only, never persisted.
+  left_collapsed = false;
+  right_collapsed = false;
 
   show_session_stats = false;
   showing_pull_screen = false;
@@ -339,8 +343,12 @@ export class MainScene {
     Achievements.mark_unlocked(state, newly);
   }
 
+  private _collapse(): CollapseOpts {
+    return { left: this.left_collapsed, right: this.right_collapsed };
+  }
+
   private _zones(): ReturnType<typeof Layout.zones> {
-    return Layout.zones(this._w, this._h);
+    return Layout.zones(this._w, this._h, this._collapse());
   }
 
   private _roster_grid(): RosterGrid {
@@ -364,9 +372,13 @@ export class MainScene {
     ctx.fillRect(0, 0, width, height);
 
     // Upgrade panel (left rail, behind the monster).
-    if (this.upgrade_ui) this.upgrade_ui.draw(ctx, state, width, height);
+    if (this.upgrade_ui) {
+      this.upgrade_ui.collapsed = this.left_collapsed;
+      this.upgrade_ui.draw(ctx, state, width, height);
+    }
 
     this._draw_roster(ctx);
+    this._draw_rail_tabs(ctx);
 
     // Monster + pop effects + humor bubble (handled by the clicker system;
     // idle bob, squash-on-click and respawn fade all live there).
@@ -471,6 +483,23 @@ export class MainScene {
     ctx.lineWidth = 1;
   }
 
+  // Chevron tabs in each rail's top-inner corner; a collapsed rail also gets
+  // its background strip here (the card/list lanes skip drawing when collapsed).
+  private _draw_rail_tabs(ctx: CanvasRenderingContext2D): void {
+    const z = this._zones();
+    if (this.left_collapsed) this._panel_chrome(ctx, z.rail_l);
+    const tabs: Array<[Rect, string]> = [
+      [Layout.rail_tab(z.rail_l, "left"), this.left_collapsed ? "<" : ">"],
+      [Layout.rail_tab(z.rail_r, "right"), this.right_collapsed ? ">" : "<"],
+    ];
+    for (const [t, glyph] of tabs) {
+      ctx.fillStyle = rgba(Config.BG_COLOR.map((v) => v * 1.5) as number[], 0.95);
+      ctx.fillRect(t.x, t.y, t.w, t.h);
+      this._text(ctx, glyph, t.x, t.y + 5, Config.POP_COLOR_WHITE,
+        { align: "center", box: t.w });
+    }
+  }
+
   // Currency row: colored chip icon + amount + rate line. `flash` drives the
   // discrete-ledger value flash (D-11): brief brighten + enlarge on purchase/
   // unlock/pull/grant sites only — never per-click gold, never the drip.
@@ -502,7 +531,7 @@ export class MainScene {
   }
 
   private _draw_kill_meter(ctx: CanvasRenderingContext2D, state: GameState): void {
-    const rect = Layout.meter_rect(this._w, this._h);
+    const rect = Layout.meter_rect(this._w, this._h, this._collapse());
     let progress = 0;
     let fill = Config.KILL_METER_FILL_COLOR;
     if (this.clicker) {
@@ -534,7 +563,7 @@ export class MainScene {
   }
 
   private _draw_bottom_bar(ctx: CanvasRenderingContext2D, state: GameState): void {
-    const b = Layout.bar_items(this._w, this._h);
+    const b = Layout.bar_items(this._w, this._h, this._collapse());
     this._panel_chrome(ctx, b.bar);
 
     // Pull button (label centered so it survives narrow rails).
@@ -607,6 +636,7 @@ export class MainScene {
     const ss = Config.ROSTER_SPRITE_SIZE;
 
     this._panel_chrome(ctx, rail);
+    if (this.right_collapsed) return;
     this._text(ctx, `Waifus (${total})`, rail.x + pad, rail.y + pad, Config.POP_COLOR_WHITE);
 
     // Cards: every slot from Layout.roster_slot, clipped below the header so
@@ -765,7 +795,7 @@ export class MainScene {
   // Session-stats overlay, centered on the stage so it can never sit on the
   // roster rail.
   private _draw_session_stats(ctx: CanvasRenderingContext2D, state: GameState): void {
-    const r = Layout.stats_rect(this._w, this._h);
+    const r = Layout.stats_rect(this._w, this._h, this._collapse());
     ctx.fillStyle = rgba([0, 0, 0, 178]);
     ctx.fillRect(r.x, r.y, r.w, r.h);
     ctx.strokeStyle = rgba([255, 255, 255, 230]);
@@ -1088,6 +1118,29 @@ export class MainScene {
       this.stats_scroll_offset = 0;
       return true;
     }
+    // Rail chevrons collapse/expand; while collapsed, any tap on the strip
+    // expands it again (Clicker Heroes pattern).
+    const z = this._zones();
+    const lt = Layout.rail_tab(z.rail_l, "left");
+    if (x >= lt.x && x <= lt.x + lt.w && y >= lt.y && y <= lt.y + lt.h) {
+      this.left_collapsed = !this.left_collapsed;
+      return true;
+    }
+    const rt = Layout.rail_tab(z.rail_r, "right");
+    if (x >= rt.x && x <= rt.x + rt.w && y >= rt.y && y <= rt.y + rt.h) {
+      this.right_collapsed = !this.right_collapsed;
+      return true;
+    }
+    if (this.left_collapsed && x <= z.rail_l.x + z.rail_l.w && y >= z.rail_l.y
+      && y <= z.rail_l.y + z.rail_l.h) {
+      this.left_collapsed = false;
+      return true;
+    }
+    if (this.right_collapsed && x >= z.rail_r.x && y >= z.rail_r.y
+      && y <= z.rail_r.y + z.rail_r.h) {
+      this.right_collapsed = false;
+      return true;
+    }
     return this._click_at(x, y);
   }
 
@@ -1096,7 +1149,7 @@ export class MainScene {
   private _click_at(x: number, y: number): boolean {
     const state = this.state;
     if (!state) return false;
-    const b = Layout.bar_items(this._w, this._h);
+    const b = Layout.bar_items(this._w, this._h, this._collapse());
     const on_reset = x >= b.reset.x && x <= b.reset.x + b.reset.w
       && y >= b.reset.y && y <= b.reset.y + b.reset.h;
     // Story 4.4 AC5: any other click disarms a pending confirmation.
@@ -1112,8 +1165,9 @@ export class MainScene {
 
     // Monster hitbox centered on the stage, matching Clicker.draw.
     if (this.clicker) {
-      const cx = Config.WINDOW_WIDTH / 2 + this.clicker.pos_x;
-      const cy = Config.WINDOW_HEIGHT / 2 + this.clicker.pos_y + this.clicker.idle_offset;
+      const stage = this._zones().stage;
+      const cx = stage.x + stage.w / 2 + this.clicker.pos_x;
+      const cy = stage.y + stage.h / 2 + this.clicker.pos_y + this.clicker.idle_offset;
       const half = Config.MONSTER_SIZE / 2;
       if (x >= cx - half && x <= cx + half && y >= cy - half && y <= cy + half) {
         if (this.clicker.monster_state === "alive") {

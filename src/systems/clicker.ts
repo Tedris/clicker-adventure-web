@@ -604,8 +604,11 @@ export class Clicker {
   }
 
   draw(ctx: CanvasRenderingContext2D, stage?: Stage): void {
-    const cx = Config.WINDOW_WIDTH / 2 + this.pos_x;
-    const cy = Config.WINDOW_HEIGHT / 2 + this.pos_y + this.idle_offset;
+    // Center on the live stage (mirrors love's getWidth/getHeight halves);
+    // the fixed Config design size is only the no-stage fallback.
+    const cx = (stage ? stage.x + stage.w / 2 : Config.WINDOW_WIDTH / 2) + this.pos_x;
+    const cy = (stage ? stage.y + stage.h / 2 : Config.WINDOW_HEIGHT / 2)
+      + this.pos_y + this.idle_offset;
     const S = Config.MONSTER_SIZE;
 
     ctx.save();
