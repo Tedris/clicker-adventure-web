@@ -3,6 +3,7 @@
 // Mirrors main.lua: every browser event forwards one step, no game logic.
 
 import Config from "./config";
+import { fit_viewport } from "./viewport";
 import Game from "./game";
 
 const canvas = document.createElement("canvas");
@@ -14,24 +15,34 @@ if (!ctx) throw new Error("canvas 2d context unavailable");
 
 const game = new Game();
 
-// DPR-aware sizing: CSS pixels drive layout math (matching Config.WINDOW_*
-// design size), the backing store multiplies by devicePixelRatio so text and
-// pixel art stay crisp on phones. Same-size repeats are cheap no-ops, which
-// mirrors the Lua font-cache rebuild guard.
-let last_dpr = 0;
+// Clicker Heroes-style sizing: fit_viewport derives a logical viewport that
+// is at least the Config.LAYOUT_MIN_* size, scaled uniformly into the CSS
+// viewport by width. The scene draws in logical space (so the layout clamp in
+// ui/layout.ts sees a size it was designed for instead of a squashed phone
+// width), the backing store multiplies by devicePixelRatio for crisp text and
+// pixel art, and any leftover height (minimum-height clamp only) stays
+// reachable through the #app scroller. Same-size repeats are cheap no-ops,
+// which mirrors the Lua font-cache rebuild guard.
+let last_k = 0;
+let fit = fit_viewport(Config.WINDOW_WIDTH, Config.WINDOW_HEIGHT);
 function resize(): void {
-  const w = window.innerWidth || Config.WINDOW_WIDTH;
-  const h = window.innerHeight || Config.WINDOW_HEIGHT;
+  const css_w = window.innerWidth || Config.WINDOW_WIDTH;
+  const css_h = window.innerHeight || Config.WINDOW_HEIGHT;
   const dpr = window.devicePixelRatio || 1;
-  canvas.style.width = w + "px";
-  canvas.style.height = h + "px";
-  if (dpr !== last_dpr || canvas.width !== Math.round(w * dpr)) {
-    canvas.width = Math.round(w * dpr);
-    canvas.height = Math.round(h * dpr);
-    last_dpr = dpr;
+  fit = fit_viewport(css_w, css_h);
+  const cw = Math.round(fit.logical_w * fit.scale);
+  const ch = Math.round(fit.logical_h * fit.scale);
+  canvas.style.width = cw + "px";
+  canvas.style.height = ch + "px";
+  app.style.overflowY = ch > css_h ? "auto" : "hidden";
+  const k = fit.scale * dpr;
+  if (k !== last_k || canvas.width !== Math.round(fit.logical_w * k)) {
+    canvas.width = Math.round(fit.logical_w * k);
+    canvas.height = Math.round(fit.logical_h * k);
+    last_k = k;
   }
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  game.main_scene.resize(w, h);
+  ctx.setTransform(k, 0, 0, k, 0, 0);
+  game.main_scene.resize(fit.logical_w, fit.logical_h);
 }
 window.addEventListener("resize", resize);
 resize();
@@ -43,8 +54,8 @@ function frame(now: number): void {
   const dt = Math.max(0, (now - last_time) / 1000);
   last_time = now;
   game.update(dt);
-  const w = window.innerWidth || Config.WINDOW_WIDTH;
-  const h = window.innerHeight || Config.WINDOW_HEIGHT;
+  const w = fit.logical_w;
+  const h = fit.logical_h;
   const bg = Config.BG_COLOR;
   ctx.fillStyle = `rgb(${Math.round(bg[0])}, ${Math.round(bg[1])}, ${Math.round(bg[2])})`;
   ctx.fillRect(0, 0, w, h);
@@ -62,9 +73,11 @@ requestAnimationFrame(frame);
 let touch_start: { x: number; y: number; lx: number; ly: number; dragging: boolean } | null = null;
 let last_tap_s = -Infinity;
 
+// Pointer space == logical space: divide the CSS offset by the current fit
+// scale so hit-test rects (derived from the logical size) match the drawing.
 function css_coords(e: PointerEvent): [number, number] {
   const rect = canvas.getBoundingClientRect();
-  return [e.clientX - rect.left, e.clientY - rect.top];
+  return [(e.clientX - rect.left) / fit.scale, (e.clientY - rect.top) / fit.scale];
 }
 
 canvas.addEventListener("pointerdown", (e: PointerEvent) => {
@@ -88,6 +101,7 @@ canvas.addEventListener("pointermove", (e: PointerEvent) => {
     }
     if (touch_start.dragging) {
       game.main_scene.wheelmoved(dx, dy, x, y);
+      if (app.scrollHeight > app.clientHeight) app.scrollTop -= dy;
     }
     touch_start.lx = x;
     touch_start.ly = y;
@@ -114,7 +128,13 @@ canvas.addEventListener("pointerup", (e: PointerEvent) => {
 canvas.addEventListener("wheel", (e: WheelEvent) => {
   e.preventDefault();
   const rect = canvas.getBoundingClientRect();
-  game.main_scene.wheelmoved(e.deltaX, e.deltaY, e.clientX - rect.left, e.clientY - rect.top);
+  game.main_scene.wheelmoved(e.deltaX, e.deltaY,
+    (e.clientX - rect.left) / fit.scale, (e.clientY - rect.top) / fit.scale);
+  // Leftover-height fallback: ride the #app scroller when the canvas is
+  // taller than the viewport (minimum-height clamp on very short screens).
+  if (app.scrollHeight > app.clientHeight) {
+    app.scrollTop += e.deltaY;
+  }
 }, { passive: false });
 
 // --- keyboard / lifecycle ---------------------------------------------------
