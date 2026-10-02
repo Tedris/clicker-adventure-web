@@ -52,13 +52,21 @@ describe("Clicker System", () => {
     }
   });
 
-  it("the milestone kill advances the area on the click that lands it", () => {
+  it("kills cap at the quota and never move the player by themselves", () => {
     const clicker = new Clicker();
     const state = st();
     state.area_kills = Config.AREA_KILL_TARGETS[0] - 1;
-    clicker.click(state); // milestone kill beats the boss and advances
-    expect(state.area_index).toBe(1);
-    expect(state.area_kills).toBe(0);
+    clicker.click(state); // milestone kill fills the harvest rhythm
+    expect(state.area_index).toBe(0); // advancing stays the player's call
+    expect(state.area_kills).toBe(Config.AREA_KILL_TARGETS[0]);
+  });
+
+  it("click gold feeds the area's own gold meter", () => {
+    const clicker = new Clicker();
+    const state = st();
+    clicker.click(state); // hp 1: one kill
+    expect((state.area_gold ?? 0) > 0).toBe(true);
+    expect(state.area_gold ?? 0).toBeLessThanOrEqual(state.gold);
   });
 
   it("later areas need multiple chips per kill and show HP", () => {

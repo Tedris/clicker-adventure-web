@@ -283,6 +283,8 @@ export class Clicker {
     state.exp = Math.max(0, (state.exp || 0) + exp_earned);
     state.prestige_gold_since_rebirth =
       (state.prestige_gold_since_rebirth || 0) + gold_earned;
+    // The area's own progress meter tracks gold earned INSIDE the area.
+    state.area_gold = Math.max(0, (state.area_gold || 0) + gold_earned);
 
     const tokens_earned = Config.TOKEN_PER_CLICK * multiplier;
     state.tokens = (state.tokens || 0) + tokens_earned;

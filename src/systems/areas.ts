@@ -14,6 +14,8 @@ export interface AreaProgress {
   boss: string;
   kills: number;
   needed: number;
+  gold: number;
+  gold_target: number;
   progress: number;
 }
 
@@ -30,33 +32,36 @@ export class Areas {
     return Config.AREAS[i];
   }
 
-  // Node boundaries inside one area's kill target, PS99 strip order:
-  // Coin pile at 1/3, EXP orb at 2/3, Treasure Chest with the milestone.
-  static node_bounds(needed: number): [number, number] {
-    return [Math.ceil(needed / 3), Math.ceil((needed * 2) / 3)];
+  // Node boundaries inside one area's gold target, PS99 strip order:
+  // Coin pile at 1/3, EXP orb at 2/3, Treasure Chest with the full meter.
+  static node_bounds(target: number): [number, number] {
+    return [Math.ceil(target / 3), Math.ceil((target * 2) / 3)];
   }
 
-  // Which nodes are harvested at a given kill count (crossing-jump safe:
-  // a loaded save already past a boundary reads as harvested, once).
-  static node_flags(kills: number, needed: number): NodeFlags {
-    const [b1, b2] = Areas.node_bounds(needed);
-    const k = Math.max(0, kills | 0);
-    return { coins: k >= b1, exp: k >= b2, chest: k >= needed };
+  // Which nodes are ripe at a given in-area gold count (crossing-jump safe:
+  // a loaded save already past a boundary reads as ripe, once).
+  static node_flags(gold: number, target: number): NodeFlags {
+    const [b1, b2] = Areas.node_bounds(target);
+    const g = Math.max(0, gold | 0);
+    return { coins: g >= b1, exp: g >= b2, chest: g >= target };
   }
 
-  // Meter/readout tuple for the current area: kills-in-area vs the target.
+  // Meter/readout tuple for the current area: gold earned in-area vs its
+  // gold target. Kills ride along for quest/harvest rhythm readouts.
   static progress(state: GameState): AreaProgress {
     const idx = Math.max(0, Math.min(state.area_index ?? 0, Config.AREAS.length - 1));
     const def = Config.AREAS[idx];
-    const needed = Config.AREA_KILL_TARGETS[idx];
-    const kills = Math.max(0, state.area_kills ?? 0);
+    const gold = Math.max(0, state.area_gold ?? 0);
+    const target = Config.AREA_GOLD_TARGETS[idx];
     return {
       index: idx,
       name: def.name,
       boss: def.boss,
-      kills,
-      needed,
-      progress: Math.max(0, Math.min(1, kills / needed)),
+      kills: Math.max(0, state.area_kills ?? 0),
+      needed: Config.AREA_KILL_TARGETS[idx],
+      gold,
+      gold_target: target,
+      progress: Math.max(0, Math.min(1, gold / target)),
     };
   }
 
@@ -69,6 +74,7 @@ export class Areas {
       state.gold = Math.max(0, (state.gold ?? 0) + gold);
       state.total_gold_earned = (state.total_gold_earned ?? 0) + gold;
       state.prestige_gold_since_rebirth = (state.prestige_gold_since_rebirth ?? 0) + gold;
+      state.area_gold = Math.max(0, (state.area_gold ?? 0) + gold);
     }
     if (exp > 0) {
       state.exp = Math.max(0, (state.exp ?? 0) + exp);
@@ -80,48 +86,45 @@ export class Areas {
     }
   }
 
-  // One kill in. Kills count up to the area target; boundary kills only RIPE
-  // the Coin pile / EXP orb pickups (tapped for their bursts via harvest),
-  // and the milestone kill pays the Treasure Chest, advances the area (or
-  // laps the final one) and resets the counter. The milestone also lifts
-  // highest_area, the furthest unlocked area that travel walks back into;
-  // cleared-area bonuses read highest_area, never the walked-back row.
-  // Returns the toast line on an advance, null on a plain kill.
+  // One kill in: counts toward harvest rhythm only. Area ADVANCEMENT is not
+  // automatic — it happens when the player harvests a ripe Treasure Chest
+  // (or walks via chevrons/menu). Returns null so existing click lanes stay
+  // shaped the same.
   static on_kill(state: GameState): string | null {
     const idx = Math.max(0, Math.min(state.area_index ?? 0, Config.AREAS.length - 1));
     const needed = Config.AREA_KILL_TARGETS[idx];
-    const prev = Math.max(0, state.area_kills ?? 0);
-    const k = Math.min(prev + 1, needed);
-    state.area_kills = k;
-
-    if (prev < needed && k >= needed) {
-      Areas._credit(state, 0, 0, Config.AREA_NODE_TOKENS);
-      Areas._reset_nodes(state);
-      state.area_kills = 0;
-      if (idx < Config.AREAS.length - 1) {
-        state.area_index = idx + 1;
-        state.highest_area = Math.max(state.highest_area ?? idx, idx + 1);
-        return `Boss down! Now in: ${Config.AREAS[idx + 1].name}`;
-      }
-      return "Final boss down! The grind goes on.";
-    }
+    state.area_kills = Math.min(Math.max(0, state.area_kills ?? 0) + 1, needed);
     return null;
   }
 
-  // Tap a ripe pickup for its one-time burst. Returns the toast line, or
-  // null when the node is not ripe yet or was already harvested.
-  static harvest(state: GameState, node: "coins" | "exp"): string | null {
+  // Tap a ripe pickup for its one-time burst. The Chest additionally unlocks
+  // the next area (highest_area lift) and laps the current one — moving on
+  // itself stays the player's call via chevrons or the Areas menu. Returns
+  // the toast line, or null when the node is not ripe yet or was harvested.
+  static harvest(state: GameState, node: "coins" | "exp" | "chest"): string | null {
     const idx = Math.max(0, Math.min(state.area_index ?? 0, Config.AREAS.length - 1));
-    const needed = Config.AREA_KILL_TARGETS[idx];
-    const flags = Areas.node_flags(state.area_kills ?? 0, needed);
+    const target = Config.AREA_GOLD_TARGETS[idx];
+    const flags = Areas.node_flags(state.area_gold ?? 0, target);
     const done = state.area_nodes ?? {};
     if (!flags[node] || done[node]) return null;
-    if (node === "coins") Areas._credit(state, Config.AREA_NODE_GOLD, 0, 0);
-    else Areas._credit(state, 0, Config.AREA_NODE_EXP, 0);
     state.area_nodes = { ...done, [node]: true };
-    return node === "coins"
-      ? `Coin pile! +${Config.AREA_NODE_GOLD} gold`
-      : `EXP orb! +${Config.AREA_NODE_EXP} exp`;
+    if (node === "coins") {
+      Areas._credit(state, Config.AREA_NODE_GOLD, 0, 0);
+      return `Coin pile! +${Config.AREA_NODE_GOLD} gold`;
+    }
+    if (node === "exp") {
+      Areas._credit(state, 0, Config.AREA_NODE_EXP, 0);
+      return `EXP orb! +${Config.AREA_NODE_EXP} exp`;
+    }
+    Areas._credit(state, 0, 0, Config.AREA_NODE_TOKENS);
+    if (idx < Config.AREAS.length - 1) {
+      state.highest_area = Math.max(state.highest_area ?? idx, idx + 1);
+    }
+    state.area_gold = 0;
+    state.area_kills = 0;
+    state.area_gold = 0;
+    Areas._reset_nodes(state);
+    return `Treasure Chest! +${Config.AREA_NODE_TOKENS} tokens`;
   }
 
   // Pickup nodes belong to the area they grew in: every move resets the
@@ -130,16 +133,16 @@ export class Areas {
     state.area_nodes = {};
   }
 
-  // Meter-full check for the boss aura/hint: the quota is met and the boss
-  // click is pending.
-  static boss_ready(state: Pick<GameState, "area_index" | "area_kills">): boolean {
+  // Full-meter check: the area's gold target is met and its Treasure Chest
+  // is ready to harvest (which is what unlocks the next area).
+  static next_ready(state: Pick<GameState, "area_index" | "area_gold">): boolean {
     const idx = Math.max(0, Math.min(state.area_index ?? 0, Config.AREAS.length - 1));
-    return Math.max(0, state.area_kills ?? 0) >= Config.AREA_KILL_TARGETS[idx];
+    return Math.max(0, state.area_gold ?? 0) >= Config.AREA_GOLD_TARGETS[idx];
   }
 
   // Hit points for the area's current monster: the number of base-click
   // chips the monster can take before the kill counts. Bosses ride the same
-  // line — the aura ring and the click-it hint mark them, not extra HP.
+  // line — the name line and the click-it hint mark them, not extra HP.
   static monster_hp(state: Pick<GameState, "area_index" | "area_kills">): number {
     const idx = Math.max(0, Math.min(state.area_index ?? 0, Config.AREA_MONSTER_HP.length - 1));
     return Config.AREA_MONSTER_HP[idx];
@@ -159,6 +162,7 @@ export class Areas {
     if (to === from) return null;
     state.area_index = to;
     state.area_kills = 0;
+    state.area_gold = 0;
     Areas._reset_nodes(state);
     return Config.AREAS[to].name;
   }
@@ -176,6 +180,7 @@ export class Areas {
     if (to === from) return null;
     state.area_index = to;
     state.area_kills = 0;
+    state.area_gold = 0;
     Areas._reset_nodes(state);
     return Config.AREAS[to].name;
   }

@@ -42,13 +42,16 @@ export interface GameState {
   area_kills: number;
   // Furthest area ever reached; travel chevrons move area_index within it.
   highest_area: number;
+  // Gold earned inside the CURRENT area; fills its progress meter and ripens
+  // the Treasure Chest. Reset on every area move and chest harvest.
+  area_gold?: number;
   // Per-area hire assignments: area index -> names of the hires on the clock
   // there (max Config.EQUIP_SLOTS per area, PS99 pet-bag model). Only the
   // CURRENT area's lane pays bonuses and lands automatic kills. An empty lane
   // means "auto": the top bonus_value instances are active.
   assignments?: Record<number, string[]>;
   // Harvested PS99-style node pickups in the CURRENT area (reset on travel).
-  area_nodes?: { coins?: true; exp?: true };
+  area_nodes?: { coins?: true; exp?: true; chest?: true };
   // Session-only artifacts (never persisted).
   offline_report: Record<string, number | string> | null;
   login_report: Record<string, number | string> | null;
@@ -87,6 +90,7 @@ export function createState(nowSeconds?: number): GameState {
     prestige_gold_since_rebirth: 0,
     area_index: 0,
     area_kills: 0,
+    area_gold: 0,
     highest_area: 0,
     assignments: {},
     area_nodes: {},

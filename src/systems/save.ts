@@ -67,6 +67,7 @@ export class Save {
     prestige_gold_since_rebirth: "number",
     area_index: "number",
     area_kills: "number",
+    area_gold: "number",
     highest_area: "number",
     assignments: "assignments_map",
     // Harvested pickup flags for the live area; rides the true-set idiom.
@@ -113,6 +114,13 @@ export class Save {
       raw.assignments = raw.assignments ?? (lane.length > 0 ? { [bucket]: lane } : {});
       delete raw.equipped;
       raw._version = 5;
+      return raw;
+    },
+    // v5 -> v6 seeds the per-area gold counter: a v5 player had no in-area
+    // meter, so their current area starts fresh on top of carried totals.
+    5: (raw) => {
+      raw.area_gold = raw.area_gold ?? 0;
+      raw._version = 6;
       return raw;
     },
   };
@@ -264,7 +272,7 @@ export class Save {
       state.gold ?? 0, state.exp ?? 0, state.tokens ?? 0, state.pity_counter ?? 0,
       state.total_gold_earned ?? 0, state.total_exp_earned ?? 0, state.total_tokens_earned ?? 0,
       String(state.passive_unlocked), state.waifus ? state.waifus.length : 0,
-      state.area_index ?? 0, state.area_kills ?? 0, state.highest_area ?? 0,
+      state.area_index ?? 0, state.area_kills ?? 0, state.area_gold ?? 0, state.highest_area ?? 0,
       Object.entries(state.assignments ?? {}).map(([k, v]) => k + ":" + v.join(".")).join(";"),
       Object.keys(state.area_nodes ?? {}).join(","),
     ];

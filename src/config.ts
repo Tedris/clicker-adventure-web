@@ -81,7 +81,7 @@ export const Config = {
   // upgraded in place by the Save migrations before validation.
   SAVE_FILENAME: "clicker-adventure-save",
   SAVE_BACKUP_FILENAME: "clicker-adventure-save-backup",
-  SAVE_VERSION: 5,
+  SAVE_VERSION: 6,
   SAVE_MIN_INTERVAL: 1.0,
 
   // Max frame dt after a background/minimize gap; economy catch-up does NOT
@@ -183,6 +183,10 @@ export const Config = {
   // Kill targets are per-area CUMULATIVE-in-area counts; the milestone kill
   // IS the boss. Clearing an area pays a permanent gold bonus.
   AREA_KILL_TARGETS: [10, 20, 40, 80, 160, 320],
+  // Gold earned INSIDE an area that fills its progress meter. A full meter
+  // ripens the Treasure Chest; harvesting it unlocks the next area. The
+  // player always chooses when to move on — nothing advances by itself.
+  AREA_GOLD_TARGETS: [50, 150, 400, 1000, 2500, 6000],
   AREA_GOLD_BONUS_PER_CLEAR: 0.25,
   // Monster hit points per area (PS99 pace): clicks deal click damage and
   // the monster dies when its HP runs out. Later areas take more clicks per

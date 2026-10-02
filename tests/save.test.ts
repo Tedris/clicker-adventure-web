@@ -522,9 +522,9 @@ describe("Save config", () => {
     expect(typeof Config.SAVE_FILENAME).toBe("string");
     expect(typeof Config.SAVE_BACKUP_FILENAME).toBe("string");
     expect(Config.SAVE_FILENAME).not.toBe(Config.SAVE_BACKUP_FILENAME);
-    // v4: the areas ladder fields. Asserted as a concrete number so an
+    // v6: the per-area gold counter. Asserted as a concrete number so an
     // accidental re-tune of the constant is caught.
-    expect(Config.SAVE_VERSION).toBe(5);
+    expect(Config.SAVE_VERSION).toBe(6);
     expect(Config.SAVE_MIN_INTERVAL >= 0.2).toBe(true);
     expect(Config.SAVE_MIN_INTERVAL <= 5).toBe(true);
     expect(typeof Config.RESET_BTN_WIDTH).toBe("number");
@@ -871,8 +871,8 @@ describe("Portability pin (cross-instance round-trip, version stability, bak rec
     expect(upB.upgrades.click_multiplier).toBe(upA.upgrades.click_multiplier);
   });
 
-  it("SAVE_VERSION stays 5 - portability is verified, not rewritten", () => {
-    expect(Config.SAVE_VERSION).toBe(5);
+  it("SAVE_VERSION stays 6 - portability is verified, not rewritten", () => {
+    expect(Config.SAVE_VERSION).toBe(6);
   });
 
   it("corrupt main + intact backup recovers with a warning, next save re-rotates both files", () => {
@@ -934,5 +934,26 @@ describe("Per-area assignments (v5)", () => {
     const fresh = createState();
     expect(freshInstance(storage).load_into(fresh, null)[0]).toBe(true);
     expect(fresh.assignments).toEqual({ 0: ["Karen the Accountant"], 2: ["Dave from IT"] });
+  });
+
+  it("migrates a v5 file by seeding the per-area gold counter", () => {
+    const raw: Record<string, unknown> = { _version: 5, area_index: 1, gold: 220 };
+    Save.MIGRATIONS[5](raw);
+    expect(raw._version).toBe(6);
+    expect(raw.area_gold).toBe(0);
+    // Already-seeded counters survive the chain untouched.
+    const seeded: Record<string, unknown> = { _version: 5, area_gold: 42 };
+    Save.MIGRATIONS[5](seeded);
+    expect(seeded.area_gold).toBe(42);
+  });
+
+  it("round-trips area_gold through save and load", () => {
+    const storage = fakeStorage();
+    const state = createState();
+    state.area_gold = 37;
+    expect(freshInstance(storage).save(state, null, T0)).toBe(true);
+    const fresh = createState();
+    expect(freshInstance(storage).load_into(fresh, null)[0]).toBe(true);
+    expect(fresh.area_gold).toBe(37);
   });
 });

@@ -548,10 +548,14 @@ export class MainScene {
     this._draw_currency_item(ctx, hud.x + hud.w - 215, hud.y + 10, "T", state.tokens ?? 0, Config.HUD_COLOR_TOKEN, rates[2], this.value_flash.token);
 
     // Areas button: the header entry into the zone menu. Shares the toggle
-    // button sizing language so it reads as chrome, not content.
+    // button sizing language so it reads as chrome, not content. It glows
+    // once the current area's chest is ready — the cue to go looking.
     const b = Layout.bar_items(this._w, this._h, this._collapse());
     const a = b.areas;
-    ctx.fillStyle = rgba(Config.BG_COLOR.map((v) => v * 1.6) as number[], 0.95);
+    const ready = Areas.next_ready(state);
+    ctx.fillStyle = rgba(ready
+      ? Config.POP_COLOR_GOLD
+      : Config.BG_COLOR.map((v) => v * 1.6) as number[], ready ? 0.9 : 0.95);
     ctx.fillRect(a.x, a.y, a.w, a.h);
     ctx.strokeStyle = rgba(Config.BG_COLOR.map((v) => v * 2.2) as number[]);
     ctx.strokeRect(a.x, a.y, a.w, a.h);
@@ -634,15 +638,17 @@ export class MainScene {
     }
   }
 
-  // Areas ladder line: current area + how many kills until the milestone
-  // boss, centered under the kill meter. Side chevrons walk the position
-  // back and forth through unlocked areas.
+  // Areas ladder line: current area + how much in-area gold is still missing
+  // before the Treasure Chest ripens, centered under the kill meter. Side
+  // chevrons walk the position back and forth through unlocked areas.
   private _draw_area_line(ctx: CanvasRenderingContext2D, state: GameState): void {
     const z = this._zones();
     const p = Areas.progress(state);
-    const remaining = Math.max(0, p.needed - p.kills);
+    const remaining = Math.max(0, p.gold_target - p.gold);
     const meter = Layout.meter_rect(this._w, this._h, this._collapse());
-    const tail = remaining > 0 ? `Boss in ${remaining}` : "Boss ready - click it!";
+    const tail = remaining > 0
+      ? `${p.gold}/${p.gold_target} gold`
+      : "Treasure ready!";
     const text = `Area ${p.index + 1}: ${p.name} · ${tail}`;
     const row_y = meter.y + meter.h + 4;
     this._text(ctx, this._fit_text(ctx, text, z.stage.w), z.stage.x, row_y,
@@ -661,7 +667,7 @@ export class MainScene {
     // Hidden when the row would touch the bottom bar.
     const spots = Layout.pickup_spots(this._w, this._h, this._collapse());
     if (spots.coins.y + spots.coins.h <= z.bar.y) {
-      this._draw_node_icons(ctx, spots, Areas.node_flags(p.kills, p.needed));
+      this._draw_node_icons(ctx, spots, Areas.node_flags(p.gold, p.gold_target));
     }
   }
 
@@ -757,12 +763,11 @@ export class MainScene {
     }
 
     const lh = Config.FONT_SIZE + 4;
-    const remaining = Math.max(0, p.needed - p.kills);
     let y = m.info_top;
     this._text(ctx, this._fit_text(ctx, `${p.name} · Boss: ${p.boss}`, m.info_w),
       m.panel.x + pad, y, Config.POP_COLOR_WHITE, { align: "center", box: m.info_w });
     y = y + lh;
-    this._text(ctx, `Kills ${p.kills}/${p.needed} · Boss in ${remaining}`,
+    this._text(ctx, `${p.gold}/${p.gold_target} gold in area`,
       m.panel.x + pad, y, Config.OFFLINE_REPORT_TEXT_COLOR, { align: "center", box: m.info_w });
     y = y + lh;
     const hires = Areas.def(p.index).pool.join(", ");
@@ -1477,15 +1482,16 @@ export class MainScene {
         return true;
       }
     }
-    // Pickup row: a tap on a ripe Coin pile / EXP orb harvests its burst
-    // once (the Chest pays itself with the milestone advance).
+    // Pickup row: a tap on a ripe Coin pile / EXP orb / Treasure Chest
+    // harvests it once. The Chest also unlocks the next area.
     const spots = Layout.pickup_spots(this._w, this._h, this._collapse());
-    for (const key of ["coins", "exp"] as const) {
+    const lanes = { coins: ["gold"], exp: ["exp"], chest: ["token"] } as const;
+    for (const key of ["coins", "exp", "chest"] as const) {
       const s = spots[key];
       if (x >= s.x && x <= s.x + s.w && y >= s.y && y <= s.y + s.h) {
         if (state) {
           const msg = Areas.harvest(state, key);
-          if (msg) this.fire_event(msg, key === "coins" ? ["gold"] : ["exp"]);
+          if (msg) this.fire_event(msg, lanes[key]);
         }
         return true;
       }

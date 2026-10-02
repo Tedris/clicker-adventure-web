@@ -71,14 +71,25 @@ describe("MainScene.draw", () => {
 });
 
 describe("MainScene.draw area line", () => {
-  it("shows the current area and kills-to-boss under the meter", () => {
+  it("shows the current area and in-area gold under the meter", () => {
     const state = createState();
     const scene = make_scene(state);
     scene.load(state);
     const ctx = stub_ctx();
     scene.draw(ctx, state, Config.WINDOW_WIDTH, Config.WINDOW_HEIGHT);
     const recorded = (ctx as unknown as { calls: string[] }).calls.join("|");
-    expect(recorded).toContain(`Area 1: Cubicle · Boss in ${Config.AREA_KILL_TARGETS[0]}`);
+    expect(recorded).toContain(`Area 1: Cubicle · 0/${Config.AREA_GOLD_TARGETS[0]} gold`);
+  });
+
+  it("announces the Treasure Chest once the gold meter is full", () => {
+    const state = createState();
+    state.area_gold = Config.AREA_GOLD_TARGETS[0];
+    const scene = make_scene(state);
+    scene.load(state);
+    const ctx = stub_ctx();
+    scene.draw(ctx, state, Config.WINDOW_WIDTH, Config.WINDOW_HEIGHT);
+    const recorded = (ctx as unknown as { calls: string[] }).calls.join("|");
+    expect(recorded).toContain("Treasure ready!");
   });
 });
 
@@ -335,7 +346,7 @@ describe("Area menu modal and equip lanes", () => {
 
   it("tapping a ripe Coin pile spot harvests it once", () => {
     const state = createState();
-    state.area_kills = Math.ceil(Config.AREA_KILL_TARGETS[0] / 3); // coins ripe
+    state.area_gold = Math.ceil(Config.AREA_GOLD_TARGETS[0] / 3); // coins ripe
     const scene = sized_scene(state);
     const s = Layout.pickup_spots(Config.WINDOW_WIDTH, Config.WINDOW_HEIGHT).coins;
     const cx = s.x + Math.floor(s.w / 2);
@@ -345,6 +356,17 @@ describe("Area menu modal and equip lanes", () => {
     const gold = state.gold;
     expect(scene.mousepressed(cx, cy)).toBe(true); // already harvested
     expect(state.gold).toBe(gold);
+  });
+
+  it("tapping the ripe Treasure Chest unlocks the next area", () => {
+    const state = createState();
+    state.area_gold = Config.AREA_GOLD_TARGETS[0]; // full meter
+    const scene = sized_scene(state);
+    const s = Layout.pickup_spots(Config.WINDOW_WIDTH, Config.WINDOW_HEIGHT).chest;
+    expect(scene.mousepressed(s.x + 9, s.y + 7)).toBe(true);
+    expect(state.tokens >= Config.AREA_NODE_TOKENS).toBe(true);
+    expect(state.highest_area).toBe(1); // unlocked, not automatic
+    expect(state.area_index).toBe(0);
   });
 
   it("duplicate hires merge into one card with an xN badge", () => {
