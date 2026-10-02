@@ -342,7 +342,7 @@ describe("Layout.bar_items prestige entry (PREST-02)", () => {
 // stays inside the panel on all four edges, and the fixed stats block can
 // never collide with the list because the list absorbs every height clamp.
 describe("Layout.stats_panel (Phase 8)", () => {
-  const COUNT = Config.ACHIEVEMENTS.length; // always 15 (test_config D05_IDS pins)
+  const COUNT = Config.ACHIEVEMENTS.length; // pinned by test_config D05_IDS
 
   it("panel and list stay inside the window and the list inside the panel at every SIZES entry", () => {
     for (const [ww, wh] of SIZES) {
@@ -365,7 +365,7 @@ describe("Layout.stats_panel (Phase 8)", () => {
     expect((600 - Config.STATS_PANEL_HEIGHT) / 2).toEqual(p.panel.y);
     expect(Config.STATS_PANEL_LINE_HEIGHT).toEqual(p.list.row_h);
     expect(1).toEqual(p.list.visible);
-    expect(196).toEqual(p.list.max_scroll);
+    expect((COUNT - 1) * Config.STATS_PANEL_LINE_HEIGHT).toEqual(p.list.max_scroll);
   });
 
   it("renders the design-size panel at the 520x360 minimum window (UI-SPEC pinned contract)", () => {
@@ -375,7 +375,7 @@ describe("Layout.stats_panel (Phase 8)", () => {
     expect(320).toEqual(p.panel.h);
     expect(20).toEqual(p.panel.y);
     expect(1).toEqual(p.list.visible);
-    expect(196).toEqual(p.list.max_scroll); // (15 - 1) * 14: wheel scroll is live at every size
+    expect((COUNT - 1) * Config.STATS_PANEL_LINE_HEIGHT).toEqual(p.list.max_scroll); // wheel scroll is live at every size
   });
 
   it("exposes a single-source block budget the list derives from (WR-02)", () => {

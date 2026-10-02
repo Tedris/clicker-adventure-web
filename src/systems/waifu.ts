@@ -128,6 +128,111 @@ const GUS_PERIODIC_LINES: readonly string[] = [
   "Laminating is calming. Laminate something today.",
 ];
 
+// Wave-two hires: the second cohort joining later-area pools.
+const MAYA_FIRST_PULL_LINES: readonly string[] = [
+  "Your stand-up was 40 minutes. I cut it to four. You felt loss and growth.",
+  "I was isekai'd mid-retrospective. The action items followed me here.",
+  "Ceremony is not optional. Even the goblin in row three attends.",
+];
+
+const MAYA_PERIODIC_LINES: readonly string[] = [
+  "Blockers? Name one. I'll make it a story point.",
+  "That click was a commitment. Honor it.",
+  "Your board needs more green squares and fewer feelings.",
+  "Sprint review is now. Yes, this is the review.",
+];
+
+const ROSA_FIRST_PULL_LINES: readonly string[] = [
+  "Two shots in everything. Gacha results included.",
+  "I was isekai'd by an espresso machine. We both woke up improved.",
+  "The break room runs on me. The rest of you just show up.",
+];
+
+const ROSA_PERIODIC_LINES: readonly string[] = [
+  "Your mug is empty. That is a leadership problem.",
+  "Decaf is a rumor. I have stamped it out.",
+  "The line outside is your roster. They respect the craft.",
+  "Oat, almond, or none. The last one is a choice, not a preference.",
+];
+
+const CARL_FIRST_PULL_LINES: readonly string[] = [
+  "Night shift. Quiet building. Everything gets done.",
+  "I was isekai'd through a mop bucket and landed somewhere cleaner.",
+  "You will call me when the ceiling leaks. You always do.",
+];
+
+const CARL_PERIODIC_LINES: readonly string[] = [
+  "Spilled coffee at eight. Mopped at 7:58. Time is a service.",
+  "The vending machine answers to me. It always has.",
+  "Keys go on the ring. Feelings go in the drawer. Order holds.",
+  "The Copy Room has a caddy of spare toner. You are welcome.",
+];
+
+const DIAZ_FIRST_PULL_LINES: readonly string[] = [
+  "The budget passed on the first read. This is what competent looks like.",
+  "I was isekai'd from a council session that actually accomplished something.",
+  "Three committees, zero sub-committees. That is the whole platform.",
+];
+
+const DIAZ_PERIODIC_LINES: readonly string[] = [
+  "The meeting ended on schedule. Write that down somewhere.",
+  "Your idle rate is fine. My budget surplus is also fine. Coincidence.",
+  "No ribbon cutting. Just done.",
+  "Everyone else is in a loop. I am on my second loop.",
+];
+
+const ANA_FIRST_PULL_LINES: readonly string[] = [
+  "Your inbox says 'urgent.' I have already triaged both.",
+  "I was isekai'd on the way to a briefing. The briefing is still coming.",
+  "A chief of staff is just a hero with a calendar. Same load-bearing role.",
+];
+
+const ANA_PERIODIC_LINES: readonly string[] = [
+  "You asked for a summary of your summary. Attached. Done already.",
+  "The crisis list is one line long. That was me.",
+  "Coffee runs and hard deadlines: both are my lane.",
+  "You have 4 minutes between pulls. Use two.",
+];
+
+const HANK_FIRST_PULL_LINES: readonly string[] = [
+  "The truck that isekai'd your hero? Mine. I drive every one.",
+  "I do not fade out in an intersection. I deliver on time.",
+  "Every realm has a loading dock. I know where all of them are.",
+];
+
+const HANK_PERIODIC_LINES: readonly string[] = [
+  "Four hundred miles before your first coffee. Then the gacha runs.",
+  "The manifest says legendary. The manifest is usually right.",
+  "Diesel, not decaf. That is the whole philosophy.",
+  "Next drop lands after your next pity timer. Always does.",
+];
+
+const ELAINE_FIRST_PULL_LINES: readonly string[] = [
+  "The night shift runs this building. You just sleep in it.",
+  "I was isekai'd through a lobby at 2am and took over at once.",
+  "Ask me a question tomorrow. It was already answered tonight.",
+];
+
+const ELAINE_PERIODIC_LINES: readonly string[] = [
+  "The 3am crisis was handled. You woke up in a better building.",
+  "Quiet hours mean the printers rest, not the standards.",
+  "Every after-hours gain stacks. That is how the tower got built.",
+  "You are on the morning report for clicking before sunrise. Approved.",
+];
+
+const BOB_FIRST_PULL_LINES: readonly string[] = [
+  "They promised me exposure. I got a chair, a stapler, and momentum.",
+  "The intern is the last one who still reads the wiki. I am the wiki.",
+  "I fixed the broken link in your footer. You never noticed. Perfect.",
+];
+
+const BOB_PERIODIC_LINES: readonly string[] = [
+  "The spreadsheet is color coded by feeling. It holds.",
+  "I made the coffee that the coffee was pretending to be.",
+  "Exposure is a currency. I am investing.",
+  "Permanent hire. Same chair. Bigger stapler.",
+];
+
 const WAIFU_FIRST_PULL_POOL: Record<string, readonly string[]> = {
   "Karen the Accountant": KAREN_FIRST_PULL_LINES,
   "Steve the HR Rep": STEVE_FIRST_PULL_LINES,
@@ -136,6 +241,14 @@ const WAIFU_FIRST_PULL_POOL: Record<string, readonly string[]> = {
   "Priya from Payroll": PRIYA_FIRST_PULL_LINES,
   "Tina from Temp Agencies": TINA_FIRST_PULL_LINES,
   "Gus from Facilities": GUS_FIRST_PULL_LINES,
+  "Maya the Scrum Coach": MAYA_FIRST_PULL_LINES,
+  "Rosa the Barista": ROSA_FIRST_PULL_LINES,
+  "Carl the Janitor": CARL_FIRST_PULL_LINES,
+  "Councilwoman Diaz": DIAZ_FIRST_PULL_LINES,
+  "Chief of Staff Ana": ANA_FIRST_PULL_LINES,
+  "Hank the Truck Driver": HANK_FIRST_PULL_LINES,
+  "Elaine the Night Manager": ELAINE_FIRST_PULL_LINES,
+  "Bob the Intern": BOB_FIRST_PULL_LINES,
 };
 
 const WAIFU_PERIODIC_POOL: Record<string, readonly string[]> = {
@@ -146,6 +259,14 @@ const WAIFU_PERIODIC_POOL: Record<string, readonly string[]> = {
   "Priya from Payroll": PRIYA_PERIODIC_LINES,
   "Tina from Temp Agencies": TINA_PERIODIC_LINES,
   "Gus from Facilities": GUS_PERIODIC_LINES,
+  "Maya the Scrum Coach": MAYA_PERIODIC_LINES,
+  "Rosa the Barista": ROSA_PERIODIC_LINES,
+  "Carl the Janitor": CARL_PERIODIC_LINES,
+  "Councilwoman Diaz": DIAZ_PERIODIC_LINES,
+  "Chief of Staff Ana": ANA_PERIODIC_LINES,
+  "Hank the Truck Driver": HANK_PERIODIC_LINES,
+  "Elaine the Night Manager": ELAINE_PERIODIC_LINES,
+  "Bob the Intern": BOB_PERIODIC_LINES,
 };
 
 export class Waifu {

@@ -186,11 +186,11 @@ export const Config = {
   AREA_GOLD_BONUS_PER_CLEAR: 0.25,
   AREAS: [
     { name: "Cubicle", boss: "The Printer Jam", bg: [26, 26, 46, 255], pool: ["Karen the Accountant", "Steve the HR Rep", "Linda the Middle Manager"] },
-    { name: "Open Plan", boss: "The All-Hands", bg: [24, 32, 42, 255], pool: ["Dave from IT"] },
-    { name: "Break Room", boss: "The Expired Yogurt", bg: [30, 28, 38, 255], pool: ["Priya from Payroll"] },
-    { name: "Conference Room", boss: "The Meeting That Could Have Been an Email", bg: [28, 24, 36, 255], pool: ["Tina from Temp Agencies"] },
-    { name: "Copy Room", boss: "The Outdated Toner", bg: [22, 30, 34, 255], pool: ["Gus from Facilities"] },
-    { name: "Corner Office", boss: "The Quarterly Close", bg: [36, 28, 26, 255], pool: [] },
+    { name: "Open Plan", boss: "The All-Hands", bg: [24, 32, 42, 255], pool: ["Dave from IT", "Maya the Scrum Coach"] },
+    { name: "Break Room", boss: "The Expired Yogurt", bg: [30, 28, 38, 255], pool: ["Priya from Payroll", "Rosa the Barista", "Carl the Janitor"] },
+    { name: "Conference Room", boss: "The Meeting That Could Have Been an Email", bg: [28, 24, 36, 255], pool: ["Tina from Temp Agencies", "Councilwoman Diaz", "Chief of Staff Ana"] },
+    { name: "Copy Room", boss: "The Outdated Toner", bg: [22, 30, 34, 255], pool: ["Gus from Facilities", "Hank the Truck Driver"] },
+    { name: "Corner Office", boss: "The Quarterly Close", bg: [36, 28, 26, 255], pool: ["Elaine the Night Manager", "Bob the Intern"] },
   ] as AreaDef[],
 
   // Bonus defs for every waifu name across all area pools (area 1 names are
@@ -203,6 +203,14 @@ export const Config = {
     "Priya from Payroll": { bonus_type: "gold", bonus_value: 0.06 },
     "Tina from Temp Agencies": { bonus_type: "exp", bonus_value: 0.08 },
     "Gus from Facilities": { bonus_type: "tokens", bonus_value: 0.09 },
+    "Maya the Scrum Coach": { bonus_type: "exp", bonus_value: 0.09 },
+    "Rosa the Barista": { bonus_type: "gold", bonus_value: 0.08 },
+    "Carl the Janitor": { bonus_type: "tokens", bonus_value: 0.10 },
+    "Councilwoman Diaz": { bonus_type: "exp", bonus_value: 0.11 },
+    "Chief of Staff Ana": { bonus_type: "gold", bonus_value: 0.09 },
+    "Hank the Truck Driver": { bonus_type: "tokens", bonus_value: 0.15 },
+    "Elaine the Night Manager": { bonus_type: "gold", bonus_value: 0.12 },
+    "Bob the Intern": { bonus_type: "exp", bonus_value: 0.06 },
   } as Record<string, { bonus_type: string; bonus_value: number }>,
 
   // Roster panel. Panel POSITION/SIZE and the grid are DERIVED from the
@@ -385,6 +393,78 @@ export const Config = {
       flavor:
         "Sets the office to exactly 21 degrees. Argues for it like it is ancient scripture.",
     },
+    "Maya the Scrum Coach": {
+      reveal_color: [155, 89, 182, 255],
+      reveal_label: "Maya (ceremony complete!)",
+      glow_intensity: 0.7,
+      reaction_delay: 0.11,
+      skill: "Ceremonial Stand-Up",
+      flavor:
+        "Her stand-ups are the real final boss. Nobody has ever reached the last phase.",
+    },
+    "Rosa the Barista": {
+      reveal_color: [230, 126, 34, 255],
+      reveal_label: "Rosa (extra shot, on the house)",
+      glow_intensity: 0.75,
+      reaction_delay: 0.1,
+      skill: "Caffeine Pipeline",
+      flavor:
+        "Keeps the whole floor awake with one machine and zero apologies.",
+    },
+    "Carl the Janitor": {
+      reveal_color: [52, 152, 219, 255],
+      reveal_label: "Carl (mopped before you spilled)",
+      glow_intensity: 0.65,
+      reaction_delay: 0.13,
+      skill: "Night Shift Protocol",
+      flavor:
+        "Knows where every spare key is. Has never once needed a key.",
+    },
+    "Councilwoman Diaz": {
+      reveal_color: [46, 204, 113, 255],
+      reveal_label: "Diaz (budget passed, on time)",
+      glow_intensity: 0.8,
+      reaction_delay: 0.09,
+      skill: "Actually Competent",
+      flavor:
+        "Runs a meeting that ends on schedule. Historians call it a miracle.",
+    },
+    "Chief of Staff Ana": {
+      reveal_color: [241, 196, 15, 255],
+      reveal_label: "Ana (already triaged it)",
+      glow_intensity: 0.7,
+      reaction_delay: 0.1,
+      skill: "Inbox Zero",
+      flavor:
+        "Every crisis hits her desk one step before it becomes anyone's problem.",
+    },
+    "Hank the Truck Driver": {
+      reveal_color: [231, 147, 74, 255],
+      reveal_label: "Hank (delivery on time)",
+      glow_intensity: 0.8,
+      reaction_delay: 0.1,
+      skill: "Delivers the Hero",
+      flavor:
+        "He is the truck that isekai'd the last hero. Still driving. Still delivering.",
+    },
+    "Elaine the Night Manager": {
+      reveal_color: [149, 165, 255, 255],
+      reveal_label: "Elaine (lights out, output up)",
+      glow_intensity: 0.75,
+      reaction_delay: 0.11,
+      skill: "After-Hours Ops",
+      flavor:
+        "Runs the whole building between midnight and the morning newsletter.",
+    },
+    "Bob the Intern": {
+      reveal_color: [127, 214, 179, 255],
+      reveal_label: "Bob (permanent hire!)",
+      glow_intensity: 0.6,
+      reaction_delay: 0.15,
+      skill: "Encrypted Enthusiasm",
+      flavor:
+        "Was promised exposure. Received a chair, a stapler, and a small empire.",
+    },
   } as Record<string, WaifuPersonality>,
 
   // Rarity ladder, rolled per successful pull (independent of which waifu
@@ -419,7 +499,7 @@ export const Config = {
     exp: "EXP",
   },
 
-  // The curated 15-badge achievement roster. Stable lowercase snake-case ids
+  // The curated 16-badge achievement roster. Stable lowercase snake-case ids
   // are the persisted state.achievements key contract — never rename casually.
   // `metric` is one of the canonical state.stats keys (a missing stat
   // evaluates as 0). Array order IS the deterministic iteration order.
@@ -439,6 +519,7 @@ export const Config = {
     { id: "rebirth_1", label: "New Employee Onboarding", metric: "rebirths", goal: 1, tier: "bronze" },
     { id: "rebirth_2", label: "Onboarded Again", metric: "rebirths", goal: 2, tier: "bronze" },
     { id: "playtime_3600", label: "Full Shift Completed", metric: "play_time", goal: 3600, tier: "gold" },
+    { id: "hire_everyone", label: "Whole Staff Onboarded", metric: "unique_hires", goal: 15, tier: "gold" },
   ],
 
   // Tier -> one-time achievement rewards, paid once by the unlock flip-guard.

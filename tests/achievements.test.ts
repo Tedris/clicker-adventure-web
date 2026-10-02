@@ -215,15 +215,20 @@ describe("Achievements:get_progress", () => {
     expect(two.current).toBe(1); // shared metric shows the shared raw current
   });
 
-  it("progress_all returns 15 rows in Config.ACHIEVEMENTS order", () => {
+  it("progress_all returns one row per Config.ACHIEVEMENTS entry in order", () => {
     const rows = Achievements.progress_all(stateWith({ clicks: 7 }));
     expect(rows).toHaveLength(Config.ACHIEVEMENTS.length);
-    expect(rows).toHaveLength(15);
     Config.ACHIEVEMENTS.forEach((def, i) => {
       expect(rows[i].id).toBe(def.id); // row order must mirror config order
       expect(rows[i].goal).toBe(def.goal);
     });
     expect(rows[0].current).toBe(7); // the first row tracks the live counter
+  });
+
+  it("hire_everyone unlocks once every hire name is on the books", () => {
+    const goal = Config.ACHIEVEMENTS.find((d) => d.id === "hire_everyone")!.goal;
+    expect(Achievements.evaluate(stateWith({ unique_hires: goal - 1 }))).not.toContain("hire_everyone");
+    expect(Achievements.evaluate(stateWith({ unique_hires: goal }))).toContain("hire_everyone");
   });
 
   it("all_definitions hands out the shared config roster unchanged", () => {
@@ -341,7 +346,7 @@ describe("Achievements — ordering determinism", () => {
     const st = stateWith({ kills: 150 });
     const a = Achievements.progress_all(st);
     const b = Achievements.progress_all(st);
-    expect(a).toHaveLength(15);
+    expect(a).toHaveLength(Config.ACHIEVEMENTS.length);
     Config.ACHIEVEMENTS.forEach((def, i) => {
       expect(a[i].id).toBe(def.id);
       expect(b[i].id).toBe(def.id);
@@ -368,7 +373,7 @@ describe("Achievements — economy immutability", () => {
     st.stats = {
       clicks: 1, kills: 10000, crits: 5000,
       pulls_total: 1, pulls_rare: 23, pulls_epic: 7, pulls_legendary: 1,
-      upgrades_bought: 500, rebirths: 2, play_time: 3600,
+      upgrades_bought: 500, rebirths: 2, play_time: 3600, unique_hires: 15,
     };
     return st;
   }
@@ -391,11 +396,11 @@ describe("Achievements — economy immutability", () => {
     const exp0 = st.exp;
     const tok0 = st.tokens;
     const newly = Achievements.evaluate(st);
-    expect(newly).toHaveLength(15); // every curated badge triggers at once
+    expect(newly).toHaveLength(Config.ACHIEVEMENTS.length); // every curated badge triggers at once
     expect(newly[0]).toBe(Config.ACHIEVEMENTS[0].id);
-    expect(newly[14]).toBe(Config.ACHIEVEMENTS[14].id);
+    expect(newly[newly.length - 1]).toBe(Config.ACHIEVEMENTS[Config.ACHIEVEMENTS.length - 1].id);
     Achievements.mark_unlocked(st, newly);
-    expect(count_keys(st.achievements)).toBe(15);
+    expect(count_keys(st.achievements)).toBe(Config.ACHIEVEMENTS.length);
     expect(Achievements.evaluate(st)).toEqual([]); // silent once marked
     expect(st.gold).toBe(gold0 + sum_gold); // one summed credit at the flip
     expect(st.tokens).toBe(tok0 + sum_tokens);

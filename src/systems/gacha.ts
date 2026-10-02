@@ -63,6 +63,7 @@ export class Gacha {
       // The pool entry is a shared config def; the roster must own its copy
       // with the rolled rarity baked into bonus_value (per-pull rarity tiers).
       const instance = this.make_instance(def);
+      const first_time = !state.waifus.some((w) => w.name === instance.name);
       state.waifus.push(instance);
       if (Config.DEBUG_MODE) {
         console.log(
@@ -71,7 +72,7 @@ export class Gacha {
       }
       // Record on the success path only, keyed off the rolled rarity; the
       // miss branch and the empty-pool bail above never reach this line.
-      this.record_pull(state, instance.rarity);
+      this.record_pull(state, instance.rarity, first_time);
       return { success: true, waifu: instance };
     }
     state.pity_counter = Math.min((state.pity_counter ?? 0) + 1, Config.PITY_HARD);
@@ -150,10 +151,13 @@ export class Gacha {
   // web port folds the pull counters here). Ladder membership is checked via
   // Config.WAIFU_RARITY_BY_KEY so a typo'd rarity never mints a bogus key in
   // the flat string->number stats map the save validator expects.
-  private record_pull(state: GameState, rarity: string): void {
+  private record_pull(state: GameState, rarity: string, first_time = false): void {
     const s = state.stats;
     if (!s) return;
     s.pulls_total = (s.pulls_total ?? 0) + 1;
+    if (first_time) {
+      s.unique_hires = (s.unique_hires ?? 0) + 1;
+    }
     if (typeof rarity === "string" && Config.WAIFU_RARITY_BY_KEY[rarity]) {
       const key = `pulls_${rarity}`;
       s[key] = (s[key] ?? 0) + 1;

@@ -169,14 +169,26 @@ describe("Gacha System", () => {
     });
 
     it("later areas join their hires to the pool", () => {
-      // area 1 pool: Karen, Steve, Linda, Dave, Dave (current-area double).
+      // area 1 pool: Karen, Steve, Linda, Dave, Maya, Dave, Maya (current double).
       const gacha = new Gacha(() => 4);
       expect(gacha.get_random_waifu(1)!.name).toBe("Dave from IT");
-      // area 5 adds every hire once (Corner Office itself has none; only the
-      // CURRENT area's hires are doubled): Karen, Steve, Linda, Dave, Priya,
-      // Tina, Gus -> index 7 is Gus from Facilities.
-      const deep = new Gacha(() => 7);
-      expect(deep.get_random_waifu(5)!.name).toBe("Gus from Facilities");
+      // area 5 stacks every hire once, plus its own pair doubled:
+      // K, S, L, Dave, Maya, Priya, Rosa, Carl, Tina, Diaz, Ana, Gus, Hank,
+      // Elaine, Bob, Elaine, Bob -> index 13 is Hank the Truck Driver.
+      const deep = new Gacha(() => 13);
+      expect(deep.get_random_waifu(5)!.name).toBe("Hank the Truck Driver");
+    });
+
+    it("counts each new hire name once in stats.unique_hires", () => {
+      // Deterministic success path: pity guarantees the drop, the stub
+      // feeds drop/pool/rarity rolls positionally.
+      const state = st({ tokens: 1000, pity_counter: Config.PITY_HARD, waifus: [], stats: {} });
+      const gacha = new Gacha(stubRandom(0, 3, 50));
+      gacha.pull(state);
+      gacha.pull(state);
+      expect(state.waifus.length).toEqual(2);
+      expect(state.stats.unique_hires).toEqual(1);
+      expect(state.stats.pulls_total).toEqual(2);
     });
   });
 

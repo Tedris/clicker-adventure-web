@@ -588,7 +588,8 @@ export class MainScene {
   }
 
   // Areas ladder line: current area + how many kills until the milestone
-  // boss, centered under the kill meter.
+  // boss, centered under the kill meter. Side chevrons walk the position
+  // back and forth through unlocked areas.
   private _draw_area_line(ctx: CanvasRenderingContext2D, state: GameState): void {
     const z = this._zones();
     const p = Areas.progress(state);
@@ -597,6 +598,26 @@ export class MainScene {
     const text = `Area ${p.index + 1}: ${p.name} · Boss in ${remaining}`;
     this._text(ctx, this._fit_text(ctx, text, z.stage.w), z.stage.x, meter.y + meter.h + 4,
       Config.PITY_NORMAL_COLOR, { align: "center", box: z.stage.w });
+
+    const nav = this._area_nav();
+    const highest = Math.max(state.highest_area ?? p.index, p.index);
+    this._text(ctx, p.index > 0 ? "<" : "-", nav.prev.x, nav.prev.y + 5,
+      Config.PITY_NORMAL_COLOR, { align: "center", box: nav.prev.w });
+    this._text(ctx, p.index < highest ? ">" : "-", nav.next.x, nav.next.y + 5,
+      Config.PITY_NORMAL_COLOR, { align: "center", box: nav.next.w });
+  }
+
+  // Chevron hitboxes flanking the area line, shared by draw and click so a
+  // pixel that lights up is exactly a pixel that walks.
+  private _area_nav(): { prev: Rect; next: Rect } {
+    const z = this._zones();
+    const meter = Layout.meter_rect(this._w, this._h, this._collapse());
+    const size = Config.RAIL_TAB_SIZE;
+    const y = meter.y + meter.h + 2;
+    return {
+      prev: { x: z.stage.x, y, w: size, h: size },
+      next: { x: z.stage.x + z.stage.w - size, y, w: size, h: size },
+    };
   }
 
   // FEEL-02/D-08: plain text line under the HUD while a gated tier remains;
@@ -1187,6 +1208,15 @@ export class MainScene {
       && y <= z.rail_r.y + z.rail_r.h) {
       this.right_collapsed = false;
       return true;
+    }
+    // Area travel chevrons: walk the position back and forth through the
+    // unlocked ladder (Areas.travel clamps to highest_area).
+    const nav = this._area_nav();
+    for (const [r, dir] of [[nav.prev, -1], [nav.next, 1]] as Array<[Rect, number]>) {
+      if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) {
+        if (state) Areas.travel(state, dir);
+        return true;
+      }
     }
     return this._click_at(x, y);
   }

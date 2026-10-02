@@ -41,6 +41,7 @@ export class Prestige {
     "achievements",
     "area_index",
     "area_kills",
+    "highest_area",
   ];
 
   static readonly RESET_SET: string[] = [

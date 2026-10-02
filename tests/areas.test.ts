@@ -88,6 +88,43 @@ describe("Areas.gold_multiplier", () => {
   });
 });
 
+describe("Areas.travel", () => {
+  it("walks the position back and forth inside highest_area", () => {
+    const s = createState();
+    s.area_index = 2;
+    s.highest_area = 2;
+    expect("Open Plan").toEqual(Areas.travel(s, -1));
+    expect(1).toEqual(s.area_index);
+    expect(0).toEqual(s.area_kills);
+    Areas.travel(s, -1);
+    expect(0).toEqual(s.area_index);
+    // Walking past the left edge is a no-op that reports null.
+    expect(null).toEqual(Areas.travel(s, -1));
+    expect(0).toEqual(s.area_index);
+  });
+
+  it("never walks ahead of highest_area", () => {
+    const s = createState();
+    s.area_index = 1;
+    s.highest_area = 2;
+    Areas.travel(s, 1);
+    Areas.travel(s, 1);
+    expect(2).toEqual(s.area_index);
+    expect(null).toEqual(Areas.travel(s, 1));
+  });
+
+  it("the milestone lifts highest_area, walking back keeps the bonus", () => {
+    const s = createState();
+    s.area_kills = Config.AREA_KILL_TARGETS[0] - 1;
+    Areas.on_kill(s);
+    expect(1).toEqual(s.highest_area);
+    Areas.travel(s, -1);
+    expect(0).toEqual(s.area_index);
+    // Bonus follows highest_area (1 clear), not the walked-back position.
+    expect(Areas.gold_multiplier(s)).toBeCloseTo(1 + Config.AREA_GOLD_BONUS_PER_CLEAR, 5);
+  });
+});
+
 describe("Areas.area_bg", () => {
   it("falls back to the base BG color before areas exist on a state", () => {
     const s = createState();

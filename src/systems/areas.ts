@@ -41,23 +41,45 @@ export class Areas {
   }
 
   // One kill in. Returns a toast line when the milestone kill advanced the
-  // area (boss defeated), or null on a plain kill.
+  // area (boss defeated), or null on a plain kill. The milestone also lifts
+  // highest_area, the furthest unlocked area that travel chevrons walk back
+  // into; cleared-area bonuses read highest_area, never the walked-back row.
   static on_kill(state: GameState): string | null {
     const idx = Math.max(0, Math.min(state.area_index ?? 0, Config.AREAS.length - 1));
     state.area_kills = (state.area_kills ?? 0) + 1;
     const needed = Config.AREA_KILL_TARGETS[idx];
     if (state.area_kills >= needed && idx < Config.AREAS.length - 1) {
       state.area_index = idx + 1;
+      state.highest_area = Math.max(state.highest_area ?? idx, idx + 1);
       state.area_kills = 0;
       return `Area cleared! Now in: ${Config.AREAS[idx + 1].name}`;
     }
     return null;
   }
 
+  // Walk the current position back and forth inside the unlocked ladder
+  // (0..highest_area). Returns the arrived area name, or null when the walk
+  // hit an edge and nothing moved. Kills keep counting in whatever area the
+  // player is standing in; the milestone check in on_kill handles the rest.
+  static travel(state: GameState, direction: number): string | null {
+    const highest = Math.max(
+      state.highest_area ?? state.area_index ?? 0,
+      state.area_index ?? 0,
+    );
+    const from = Math.max(0, Math.min(state.area_index ?? 0, Config.AREAS.length - 1));
+    const to = Math.max(0, Math.min(from + direction, highest));
+    if (to === from) return null;
+    state.area_index = to;
+    state.area_kills = 0;
+    return Config.AREAS[to].name;
+  }
+
   // Permanent gold multiplier: +AREA_GOLD_BONUS_PER_CLEAR per cleared area,
-  // stacking with (not replacing) the prestige multiplier.
+  // stacking with (not replacing) the prestige multiplier. Cleared count is
+  // highest_area so walking back never shrinks the bonus.
   static gold_multiplier(state: GameState): number {
-    const cleared = Math.max(0, Math.min(state.area_index ?? 0, Config.AREAS.length - 1));
+    const idx = Math.max(0, Math.min(state.area_index ?? 0, Config.AREAS.length - 1));
+    const cleared = Math.max(0, Math.min(Math.max(state.highest_area ?? idx, idx), Config.AREAS.length - 1));
     return Math.round((1 + cleared * Config.AREA_GOLD_BONUS_PER_CLEAR) * 1000) / 1000;
   }
 

@@ -40,6 +40,8 @@ export interface GameState {
   // Areas ladder: current area index + kills inside it (lifetime, survive rebirth).
   area_index: number;
   area_kills: number;
+  // Furthest area ever reached; travel chevrons move area_index within it.
+  highest_area: number;
   // Session-only artifacts (never persisted).
   offline_report: Record<string, number | string> | null;
   login_report: Record<string, number | string> | null;
@@ -78,6 +80,7 @@ export function createState(nowSeconds?: number): GameState {
     prestige_gold_since_rebirth: 0,
     area_index: 0,
     area_kills: 0,
+    highest_area: 0,
     offline_report: null,
     login_report: null,
     save_warning: null,
