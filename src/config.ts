@@ -81,7 +81,7 @@ export const Config = {
   // upgraded in place by the Save migrations before validation.
   SAVE_FILENAME: "clicker-adventure-save",
   SAVE_BACKUP_FILENAME: "clicker-adventure-save-backup",
-  SAVE_VERSION: 4,
+  SAVE_VERSION: 5,
   SAVE_MIN_INTERVAL: 1.0,
 
   // Max frame dt after a background/minimize gap; economy catch-up does NOT
@@ -184,6 +184,13 @@ export const Config = {
   // IS the boss. Clearing an area pays a permanent gold bonus.
   AREA_KILL_TARGETS: [10, 20, 40, 80, 160, 320],
   AREA_GOLD_BONUS_PER_CLEAR: 0.25,
+  // Monster hit points per area (PS99 pace): clicks deal click damage and
+  // the monster dies when its HP runs out. Later areas take more clicks per
+  // kill; the milestone boss doubles its area's HP.
+  AREA_MONSTER_HP: [1, 2, 4, 8, 16, 32],
+  // Assigned hires land this much automatic damage per second on the monster
+  // (each ally contributes one click-damage worth per tick).
+  AUTO_KILL_TICK: 1.0,
   // PS99-style node hops inside an area: the kill target splits into a Coin
   // pile, an EXP orb and a Treasure Chest (in that harvest order), each
   // paid once when its boundary kill lands. The milestone boss is the last
@@ -199,12 +206,12 @@ export const Config = {
   AREA_MENU_WIDTH: 340,
   AREA_MENU_HEIGHT: 250,
   AREAS: [
-    { name: "Cubicle", boss: "The Printer Jam", bg: [26, 26, 46, 255], pool: ["Karen the Accountant", "Steve the HR Rep", "Linda the Middle Manager"] },
-    { name: "Open Plan", boss: "The All-Hands", bg: [24, 32, 42, 255], pool: ["Dave from IT", "Maya the Scrum Coach"] },
-    { name: "Break Room", boss: "The Expired Yogurt", bg: [30, 28, 38, 255], pool: ["Priya from Payroll", "Rosa the Barista", "Carl the Janitor"] },
-    { name: "Conference Room", boss: "The Meeting That Could Have Been an Email", bg: [28, 24, 36, 255], pool: ["Tina from Temp Agencies", "Councilwoman Diaz", "Chief of Staff Ana"] },
-    { name: "Copy Room", boss: "The Outdated Toner", bg: [22, 30, 34, 255], pool: ["Gus from Facilities", "Hank the Truck Driver"] },
-    { name: "Corner Office", boss: "The Quarterly Close", bg: [36, 28, 26, 255], pool: ["Elaine the Night Manager", "Bob the Intern"] },
+    { name: "Cubicle", boss: "The Printer Jam", bg: [26, 26, 46, 255], monster: "mon_slime", pool: ["Karen the Accountant", "Steve the HR Rep", "Linda the Middle Manager"] },
+    { name: "Open Plan", boss: "The All-Hands", bg: [24, 32, 42, 255], monster: "mon_goblin", pool: ["Dave from IT", "Maya the Scrum Coach"] },
+    { name: "Break Room", boss: "The Expired Yogurt", bg: [30, 28, 38, 255], monster: "mon_skeleton", pool: ["Priya from Payroll", "Rosa the Barista", "Carl the Janitor"] },
+    { name: "Conference Room", boss: "The Meeting That Could Have Been an Email", bg: [28, 24, 36, 255], monster: "mon_cyclops", pool: ["Tina from Temp Agencies", "Councilwoman Diaz", "Chief of Staff Ana"] },
+    { name: "Copy Room", boss: "The Outdated Toner", bg: [22, 30, 34, 255], monster: "mon_mimic", pool: ["Gus from Facilities", "Hank the Truck Driver"] },
+    { name: "Corner Office", boss: "The Quarterly Close", bg: [36, 28, 26, 255], monster: "mon_cyclops", pool: ["Elaine the Night Manager", "Bob the Intern"] },
   ] as AreaDef[],
 
   // Bonus defs for every waifu name across all area pools (area 1 names are
@@ -567,6 +574,7 @@ export interface AreaDef {
   name: string;
   boss: string;
   bg: readonly number[];
+  monster: string;
   pool: readonly string[];
 }
 

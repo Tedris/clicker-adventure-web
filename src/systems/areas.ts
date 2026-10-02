@@ -114,9 +114,17 @@ export class Areas {
 
   // Meter-full check for the boss aura/hint: the quota is met and the boss
   // click is pending.
-  static boss_ready(state: GameState): boolean {
+  static boss_ready(state: Pick<GameState, "area_index" | "area_kills">): boolean {
     const idx = Math.max(0, Math.min(state.area_index ?? 0, Config.AREAS.length - 1));
     return Math.max(0, state.area_kills ?? 0) >= Config.AREA_KILL_TARGETS[idx];
+  }
+
+  // Hit points for the area's current monster: the number of base-click
+  // chips the monster can take before the kill counts. Bosses ride the same
+  // line — the aura ring and the click-it hint mark them, not extra HP.
+  static monster_hp(state: Pick<GameState, "area_index" | "area_kills">): number {
+    const idx = Math.max(0, Math.min(state.area_index ?? 0, Config.AREA_MONSTER_HP.length - 1));
+    return Config.AREA_MONSTER_HP[idx];
   }
 
   // Walk the current position back and forth inside the unlocked ladder

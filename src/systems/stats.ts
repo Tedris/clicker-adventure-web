@@ -20,17 +20,23 @@ export class Stats {
     legendary: true,
   };
 
-  // One paid click is one kill while monsters stay one-hit; a future
-  // multi-hit monster must relocate the kills bump to the real death
-  // transition.
+  // Every paid click counts clicks (+crits). Kills are their own transition
+  // now that monsters take multiple hits — see record_kill.
   static record_click(state: StatsState, is_crit?: boolean): void {
     const s = state?.stats;
     if (!s) return;
     s.clicks = (s.clicks ?? 0) + 1;
-    s.kills = (s.kills ?? 0) + 1;
     if (is_crit) {
       s.crits = (s.crits ?? 0) + 1;
     }
+  }
+
+  // One death transition = one kill, whether a click or an assigned-hire
+  // tick landed the final hit. Counts once per kill, never per click.
+  static record_kill(state: StatsState): void {
+    const s = state?.stats;
+    if (!s) return;
+    s.kills = (s.kills ?? 0) + 1;
   }
 
   // pulls_total counts every successful roll; the named sibling key moves

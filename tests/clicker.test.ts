@@ -56,7 +56,7 @@ describe("Clicker System", () => {
     const clicker = new Clicker();
     const state = st();
     state.area_kills = Config.AREA_KILL_TARGETS[0] - 1;
-    clicker.click(state); // milestone kill fills the meter
+    clicker.click(state); // killing chip fills the meter, still area 1
     expect(state.area_index).toBe(0);
     expect(state.area_kills).toBe(Config.AREA_KILL_TARGETS[0]);
     clicker.spawn_new_monster();
@@ -65,9 +65,52 @@ describe("Clicker System", () => {
     expect(state.area_kills).toBe(0);
   });
 
+  it("later areas need multiple chips per kill and show HP", () => {
+    const clicker = new Clicker();
+    const state = st();
+    state.area_index = 1; // Open Plan: hp 2
+    clicker.spawn_new_monster(state);
+    expect(clicker.max_hp).toBe(Config.AREA_MONSTER_HP[1]);
+    clicker.click(state);
+    expect(clicker.monster_state).toBe("alive"); // chipped, not dead yet
+    expect(clicker.hp).toBe(Config.AREA_MONSTER_HP[1] - 1);
+    clicker.click(state);
+    expect(clicker.monster_state).toBe("dead");
+    expect(state.area_kills).toBe(1); // counts once, not per chip
+  });
+
+  it("each area favors its own monster species", () => {
+    const clicker = new Clicker();
+    const seen: string[] = [];
+    // Early-exp pool only exposes the ungated species; each matching area
+    // must prefer its own key over the random fallback.
+    for (const idx of [0, 1]) {
+      const state = st();
+      state.area_index = idx;
+      clicker.spawn_new_monster(state);
+      seen.push(clicker.current_monster?.sprite_key ?? "");
+      expect(clicker.current_monster?.sprite_key).toBe(Config.AREAS[idx].monster);
+    }
+    expect(new Set(seen).size > 1).toBe(true);
+  });
+
+  it("assigned hires land automatic kills on a tick, bosses included", () => {
+    const clicker = new Clicker();
+    const state = st({ session_clicks: 0 });
+    state.area_index = 1;
+    clicker.spawn_new_monster(state); // hp 2
+    const kills = clicker.auto_tick(state, 2); // two allies x click dmg
+    expect(kills).toBe(1);
+    expect(state.area_kills).toBe(1);
+    // Overflow carries over within the tick: 3 allies clear hp 2 with 1 left.
+    clicker.spawn_new_monster(state);
+    expect(clicker.auto_tick(state, 3)).toBe(1);
+    expect(clicker.hp).toBe(Config.AREA_MONSTER_HP[1] - 1);
+  });
+
   it("prevents clicking dead monsters", () => {
     const clicker = new Clicker();
-    clicker.click(st());
+    clicker.click(st()); // hp 1: the first chip is the kill
     expect(() => clicker.click(st())).toThrow();
   });
 
@@ -602,7 +645,7 @@ describe("Death-fade click buffer (FEEL-04)", () => {
 
   it("keeps the sacred alive-assert: a direct click on a dead monster still errors", () => {
     const clicker = new Clicker();
-    clicker.click(st());
+    clicker.click(st()); // kill
     expect(() => clicker.click(st())).toThrow();
   });
 });
@@ -629,7 +672,7 @@ describe("Clicker lifetime stats recording (STATS-01/STATS-02)", () => {
     const state = st({ stats: {} });
     click_with_crit_rate(0, state);
     expect(state.stats.clicks).toBe(1);
-    expect(state.stats.kills).toBe(1);
+    expect(state.stats.kills).toBe(1); // hp 1 area: the click is the kill
     expect(state.stats.crits).toBeUndefined();
     expect(state.session_clicks).toBe(1); // session and lifetime advance 1:1
   });

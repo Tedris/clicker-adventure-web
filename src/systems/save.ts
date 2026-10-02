@@ -68,7 +68,7 @@ export class Save {
     area_index: "number",
     area_kills: "number",
     highest_area: "number",
-    equipped: "string_list",
+    assignments: "assignments_map",
   };
 
   // Versioned save migrations: each entry upgrades a raw decoded chunk IN
@@ -100,6 +100,17 @@ export class Save {
       raw.area_kills = raw.area_kills ?? 0;
       raw.highest_area = raw.highest_area ?? raw.area_index ?? 0;
       raw._version = 4;
+      return raw;
+    },
+    // v4 -> v5 folds the single equip lane into per-area assignment buckets:
+    // the old lane was wherever the player last stood, so it lands on their
+    // current area; everything else starts on "auto".
+    4: (raw) => {
+      const lane = Array.isArray(raw.equipped) ? raw.equipped : [];
+      const bucket = String(raw.area_index ?? raw.highest_area ?? 0);
+      raw.assignments = raw.assignments ?? (lane.length > 0 ? { [bucket]: lane } : {});
+      delete raw.equipped;
+      raw._version = 5;
       return raw;
     },
   };
@@ -189,6 +200,19 @@ export class Save {
       } else if (kind === "string_list") {
         if (!Array.isArray(v)) return [null, "bad string list field: " + key];
         out[key] = v.filter((s): s is string => typeof s === "string");
+      } else if (kind === "assignments_map") {
+        // Area index -> lane of hire names. Numeric JSON keys, string-only
+        // entries; wrongly-shaped buckets are dropped, a bad whole keeps the
+        // flat-map spirit and fails the file.
+        if (typeof v !== "object" || Array.isArray(v)) {
+          return [null, "bad assignments map field: " + key];
+        }
+        const lanes: Record<string, unknown> = {};
+        for (const [ak, av] of Object.entries(v as Record<string, unknown>)) {
+          if (!Array.isArray(av)) continue;
+          lanes[ak] = av.filter((s): s is string => typeof s === "string");
+        }
+        out[key] = lanes;
       } else if (kind === "string_to_number" || kind === "string_to_true") {
         if (typeof v !== "object" || Array.isArray(v)) {
           return [null, "bad table field: " + key];
@@ -239,7 +263,7 @@ export class Save {
       state.total_gold_earned ?? 0, state.total_exp_earned ?? 0, state.total_tokens_earned ?? 0,
       String(state.passive_unlocked), state.waifus ? state.waifus.length : 0,
       state.area_index ?? 0, state.area_kills ?? 0, state.highest_area ?? 0,
-      (state.equipped ?? []).join(","),
+      Object.entries(state.assignments ?? {}).map(([k, v]) => k + ":" + v.join(".")).join(";"),
     ];
     parts.push(Object.keys(state.exp_thresholds_unlocked ?? {}).length);
     const levels: Record<string, number> = upgrades ? upgrades.get_state() : state.upgrades ?? {};

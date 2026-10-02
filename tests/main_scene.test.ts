@@ -297,7 +297,7 @@ describe("Area menu modal and equip lanes", () => {
     expect(scene.area_menu_open).toBe(false);
   });
 
-  it("the detail overlay's equip button toggles the lane", () => {
+  it("the detail overlay's assign button toggles the current-area lane", () => {
     const state = createState();
     state.waifus = [{ name: "Karen the Accountant", bonus_type: "tokens", bonus_value: 0.1, rarity: "rare" }];
     const scene = sized_scene(state);
@@ -307,10 +307,32 @@ describe("Area menu modal and equip lanes", () => {
     const cx = btn.x + Math.floor(btn.w / 2);
     const cy = btn.y + Math.floor(btn.h / 2);
     expect(scene.mousepressed(cx, cy)).toBe(true);
-    expect(state.equipped).toEqual(["Karen the Accountant"]);
+    expect(state.assignments?.[0]).toEqual(["Karen the Accountant"]);
     expect(scene.waifu_detail_index).toBe(1); // button keeps the overlay open
     expect(scene.mousepressed(cx, cy)).toBe(true);
-    expect(state.equipped).toEqual([]);
+    expect(state.assignments?.[0]).toEqual([]);
+  });
+
+  it("the header Areas button opens and closes the zone menu", () => {
+    const state = createState();
+    const scene = sized_scene(state);
+    const a = Layout.bar_items(Config.WINDOW_WIDTH, Config.WINDOW_HEIGHT).areas;
+    const cx = a.x + Math.floor(a.w / 2);
+    const cy = a.y + Math.floor(a.h / 2);
+    expect(scene.mousepressed(cx, cy)).toBe(true);
+    expect(scene.area_menu_open).toBe(true);
+    expect(scene.mousepressed(cx, cy)).toBe(true); // second tap closes
+    expect(scene.area_menu_open).toBe(false);
+  });
+
+  it("assigned hires deal automatic damage on the update tick", () => {
+    const state = createState();
+    state.waifus = [{ name: "Karen the Accountant", bonus_type: "tokens", bonus_value: 0.1, rarity: "rare" }];
+    state.assignments = { 0: ["Karen the Accountant"] };
+    const scene = sized_scene(state);
+    const kills_before = state.area_kills;
+    scene.update(Config.AUTO_KILL_TICK + 0.01);
+    expect(state.area_kills).toBe(kills_before + 1); // one ally, one kill/sec
   });
 
   it("duplicate hires merge into one card with an xN badge", () => {

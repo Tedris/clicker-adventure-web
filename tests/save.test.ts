@@ -130,7 +130,7 @@ function writeV1Save(storage: FakeStorage): void {
 // the constant so a future bump cannot quietly turn this fixture into CURRENT.
 // The v2 fixture exercises the FULL chain (2 -> 3 -> current), so the stats
 // seeding and the areas seeding must BOTH land.
-const V2 = Config.SAVE_VERSION - 2;
+const V2 = 2;
 
 function writeV2Save(storage: FakeStorage): void {
   storage.files[Config.SAVE_FILENAME] = JSON.stringify({
@@ -524,7 +524,7 @@ describe("Save config", () => {
     expect(Config.SAVE_FILENAME).not.toBe(Config.SAVE_BACKUP_FILENAME);
     // v4: the areas ladder fields. Asserted as a concrete number so an
     // accidental re-tune of the constant is caught.
-    expect(Config.SAVE_VERSION).toBe(4);
+    expect(Config.SAVE_VERSION).toBe(5);
     expect(Config.SAVE_MIN_INTERVAL >= 0.2).toBe(true);
     expect(Config.SAVE_MIN_INTERVAL <= 5).toBe(true);
     expect(typeof Config.RESET_BTN_WIDTH).toBe("number");
@@ -871,8 +871,8 @@ describe("Portability pin (cross-instance round-trip, version stability, bak rec
     expect(upB.upgrades.click_multiplier).toBe(upA.upgrades.click_multiplier);
   });
 
-  it("SAVE_VERSION stays 4 - portability is verified, not rewritten", () => {
-    expect(Config.SAVE_VERSION).toBe(4);
+  it("SAVE_VERSION stays 5 - portability is verified, not rewritten", () => {
+    expect(Config.SAVE_VERSION).toBe(5);
   });
 
   it("corrupt main + intact backup recovers with a warning, next save re-rotates both files", () => {
@@ -897,3 +897,42 @@ describe("Portability pin (cross-instance round-trip, version stability, bak rec
   });
 });
 
+
+describe("Per-area assignments (v5)", () => {
+  it("validates assignments_map buckets: string-only lanes, junk buckets dropped", () => {
+    const [data, err] = Save._validate({
+      _version: Config.SAVE_VERSION,
+      assignments: { 0: ["Karen the Accountant", 42], 1: "nope" },
+    });
+    expect(err).toBe(null);
+    expect(data!.assignments).toEqual({ 0: ["Karen the Accountant"] });
+  });
+
+  it("fails a whole file when assignments is not an object", () => {
+    const [data, err] = Save._validate({ _version: Config.SAVE_VERSION, assignments: [1, 2] });
+    expect(data).toBe(null);
+    expect(err).toContain("assignments");
+  });
+
+  it("migrates a v4 equip lane into the current-area bucket", () => {
+    const raw: Record<string, unknown> = {
+      _version: 4, area_index: 2, highest_area: 3,
+      equipped: ["Karen the Accountant", "Dave from IT"],
+    };
+    Save.MIGRATIONS[4](raw);
+    expect(raw._version).toBe(5);
+    expect(raw.assignments).toEqual({ 2: ["Karen the Accountant", "Dave from IT"] });
+    expect(raw.equipped).toBeUndefined();
+  });
+
+  it("round-trips assignments through save and load", () => {
+    const storage = fakeStorage();
+    const inst = freshInstance(storage);
+    const state = createState();
+    state.assignments = { 0: ["Karen the Accountant"], 2: ["Dave from IT"] };
+    expect(inst.save(state, null, T0)).toBe(true);
+    const fresh = createState();
+    expect(freshInstance(storage).load_into(fresh, null)[0]).toBe(true);
+    expect(fresh.assignments).toEqual({ 0: ["Karen the Accountant"], 2: ["Dave from IT"] });
+  });
+});

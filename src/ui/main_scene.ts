@@ -127,6 +127,8 @@ export class MainScene {
   stats_scroll_offset = 0;
   // Area menu modal (zone picker + area info + quest). Runtime-only.
   area_menu_open = false;
+  // Assigned-hire automatic damage accumulator (PS99 idle loop), seconds.
+  auto_accum = 0;
   // Last hover position, for wheel routing without an explicit cursor arg.
   _hover_x: number | null = null;
   _hover_y: number | null = null;
@@ -246,6 +248,17 @@ export class MainScene {
       }
     }
     if (this.upgrade_ui) this.upgrade_ui.update(scaled_dt);
+
+    // PS99 idle loop: hires assigned to the CURRENT area land a click's worth
+    // of automatic damage per second, chipping monsters without any input.
+    if (state && this.clicker && this.waifu) {
+      this.auto_accum = this.auto_accum + scaled_dt;
+      if (this.auto_accum >= Config.AUTO_KILL_TICK) {
+        this.auto_accum = this.auto_accum % Config.AUTO_KILL_TICK;
+        const allies = this.waifu.effective_assigned(state).length;
+        if (allies > 0) this.clicker.auto_tick(state, allies);
+      }
+    }
 
     // Rail scroll clamping (grid bounds come from the live window size).
     const grid = this._roster_grid();
@@ -405,6 +418,7 @@ export class MainScene {
     // Monster + pop effects + humor bubble (handled by the clicker system;
     // idle bob, squash-on-click and respawn fade all live there).
     this.clicker?.draw(ctx, this._zones().stage);
+    this._draw_assigned_helpers(ctx, state);
     this._draw_boss_aura(ctx, state);
 
     this._draw_kill_meter(ctx, state);
@@ -532,7 +546,18 @@ export class MainScene {
     const rates = this._hud_rates();
     this._draw_currency_item(ctx, hud.x + 12, hud.y + 10, "G", state.gold ?? 0, Config.HUD_COLOR_GOLD, rates[0], this.value_flash.gold);
     this._draw_currency_item(ctx, hud.x + hud.w / 2 - 50, hud.y + 10, "E", state.exp ?? 0, Config.HUD_COLOR_EXP, rates[1], this.value_flash.exp);
-    this._draw_currency_item(ctx, hud.x + hud.w - 160, hud.y + 10, "T", state.tokens ?? 0, Config.HUD_COLOR_TOKEN, rates[2], this.value_flash.token);
+    this._draw_currency_item(ctx, hud.x + hud.w - 215, hud.y + 10, "T", state.tokens ?? 0, Config.HUD_COLOR_TOKEN, rates[2], this.value_flash.token);
+
+    // Areas button: the header entry into the zone menu. Shares the toggle
+    // button sizing language so it reads as chrome, not content.
+    const b = Layout.bar_items(this._w, this._h, this._collapse());
+    const a = b.areas;
+    ctx.fillStyle = rgba(Config.BG_COLOR.map((v) => v * 1.6) as number[], 0.95);
+    ctx.fillRect(a.x, a.y, a.w, a.h);
+    ctx.strokeStyle = rgba(Config.BG_COLOR.map((v) => v * 2.2) as number[]);
+    ctx.strokeRect(a.x, a.y, a.w, a.h);
+    this._text(ctx, `Areas ${Areas.progress(state).index + 1} >`, a.x, a.y + (a.h - Config.FONT_SIZE) / 2,
+      Config.POP_COLOR_WHITE, { align: "center", box: a.w });
   }
 
   // Panel fill + border pair used by HUD / roster / bars.
@@ -689,6 +714,36 @@ export class MainScene {
     ctx.arc(cx, cy, Config.MONSTER_SIZE / 2 + 6, 0, Math.PI * 2);
     ctx.stroke();
     ctx.lineWidth = 1;
+  }
+
+  // The assigned crew, drawn as tiny sprites orbiting the monster so the
+  // automatic damage has a face. Duplicate hires collapse to one sprite.
+  private _draw_assigned_helpers(ctx: CanvasRenderingContext2D, state: GameState): void {
+    if (!this.clicker || !this.waifu) return;
+    const seen = new Set<string>();
+    const allies = this.waifu.effective_assigned(state).filter((w) => {
+      if (!w.name || seen.has(w.name)) return false;
+      seen.add(w.name);
+      return true;
+    }).slice(0, 4);
+    if (allies.length === 0) return;
+    const stage = this._zones().stage;
+    const cx = stage.x + stage.w / 2 + this.clicker.pos_x;
+    const cy = stage.y + stage.h / 2 + this.clicker.pos_y + this.clicker.idle_offset;
+    const r = Config.MONSTER_SIZE / 2 + 12;
+    const size = Config.SPRITE_PIXEL_SIZE;
+    for (let i = 0; i < allies.length; i++) {
+      const a = (i / allies.length) * Math.PI * 2 + this.clicker.anim_timer * 0.8;
+      const x = cx + Math.cos(a) * r - size / 2;
+      const y = cy + Math.sin(a) * r * 0.6 - size / 2;
+      const sprite = createSpriteCanvas(allies[i].name, 1);
+      if (sprite && ctx.drawImage) {
+        ctx.drawImage(sprite, x, y);
+      } else {
+        ctx.fillStyle = rgba(Config.WAIFU_IDLE_COLOR);
+        ctx.fillRect(x, y, size, size);
+      }
+    }
   }
 
   // Band holding the two text rows under the kill meter: chevrons walk, and
@@ -858,7 +913,8 @@ export class MainScene {
     const body = Layout.rail_body(rail);
     const groups = this._roster_groups();
     const total = groups.length;
-    const equipped = this.state?.equipped ?? [];
+    // Dot on the crew actually assigned to the CURRENT area (per-area lanes).
+    const lane = this.state?.assignments?.[this.state.area_index ?? 0] ?? [];
     const g = Layout.roster_grid(body.w, body.h, total);
     const scroll = this.roster_scroll_offset;
     const pad = Config.ROSTER_PANEL_PADDING;
@@ -927,7 +983,7 @@ export class MainScene {
 
           // Equip dot + duplicate badge: who is on the clock, and how many
           // copies back it up — both without leaving the card.
-          if (equipped.includes(waifu.name)) {
+          if (lane.includes(waifu.name)) {
             ctx.fillStyle = rgba(Config.POP_COLOR_GOLD);
             ctx.fillRect(s_rect.x + cs / 2 - 2, s_rect.y + 2, 4, 4);
           }
@@ -1174,13 +1230,16 @@ export class MainScene {
       y = this._text_lines(ctx, `"${personality.flavor}"`, d.inner.x, y, d.inner.w, Config.WAIFU_HUMOR_COLOR);
     }
 
-    // Equip lane button: swaps this hire in/out of the active trio. Kept
-    // above the dismiss line so tapping the button never also closes.
+    // Per-area assignment button (PS99 pet bag): this hire joins/leaves the
+    // CURRENT area's crew. Kept above the dismiss line so tapping the button
+    // never also closes.
     const btn = this._equip_btn();
-    const on_clock = (this.state?.equipped ?? []).includes(waifu.name);
+    const area_name = Areas.def(this.state?.area_index ?? 0).name;
+    const lane = this.state?.assignments?.[this.state?.area_index ?? 0] ?? [];
+    const on_clock = lane.includes(waifu.name);
     ctx.fillStyle = rgba(on_clock ? Config.POP_COLOR_GOLD : Config.BG_COLOR.map((v) => v * 1.4) as number[], 0.95);
     ctx.fillRect(btn.x, btn.y, btn.w, btn.h);
-    this._text(ctx, this._fit_text(ctx, on_clock ? "Equipped - tap to swap out" : "Tap to equip", btn.w - 8),
+    this._text(ctx, this._fit_text(ctx, on_clock ? `Assigned: ${area_name}` : `Assign to ${area_name}`, btn.w - 8),
       btn.x + 4, btn.y + (btn.h - Config.FONT_SIZE) / 2, Config.POP_COLOR_WHITE);
 
     // Phase 15 (INP-04): dismiss affordance on the panel bottom pad line.
@@ -1361,7 +1420,7 @@ export class MainScene {
       const btn = this._equip_btn();
       if (state && x >= btn.x && x <= btn.x + btn.w && y >= btn.y && y <= btn.y + btn.h) {
         const group = this._roster_groups()[this.waifu_detail_index - 1];
-        if (group && this.waifu) this.waifu.toggle_equip(state, group.name);
+        if (group && this.waifu) this.waifu.toggle_assign(state, group.name);
         return true;
       }
       this.waifu_detail_index = null;
@@ -1409,6 +1468,13 @@ export class MainScene {
       const inside = x >= m.panel.x && x <= m.panel.x + m.panel.w
         && y >= m.panel.y && y <= m.panel.y + m.panel.h;
       if (!inside) this.area_menu_open = false;
+      return true;
+    }
+    // Header Areas button: the primary entry into the zone menu.
+    const b_items = Layout.bar_items(this._w, this._h, this._collapse());
+    const ab = b_items.areas;
+    if (x >= ab.x && x <= ab.x + ab.w && y >= ab.y && y <= ab.y + ab.h) {
+      this.area_menu_open = !this.area_menu_open;
       return true;
     }
     // Rail chevrons collapse/expand; while collapsed, any tap on the strip

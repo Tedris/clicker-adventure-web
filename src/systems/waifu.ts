@@ -332,14 +332,17 @@ export class Waifu {
     return pool[this.random(pool.length) - 1];
   }
 
-  // The hires currently on the clock. An empty/missing equip lane means
-  // "auto": the top EQUIP_SLOTS instances by bonus_value are active, which
-  // keeps legacy saves and fresh states behaving like the old always-sum
-  // roster until the player starts choosing. Otherwise every roster copy of
-  // an equipped name counts (duplicate stacks keep stacking additively).
-  effective_equipped(state: Pick<GameState, "waifus" | "equipped">): WaifuInstance[] {
+  // The hires assigned to the CURRENT area (PS99 pet-bag model: crews are
+  // stationed per place). An empty lane means "auto": the top EQUIP_SLOTS
+  // instances by bonus_value are active, which keeps legacy saves and fresh
+  // states behaving like the old always-sum roster until the player starts
+  // choosing. Otherwise every roster copy of an assigned name counts
+  // (duplicate stacks keep stacking additively).
+  effective_assigned(
+    state: Pick<GameState, "waifus" | "assignments" | "area_index">,
+  ): WaifuInstance[] {
     const roster = state.waifus ?? [];
-    const names = state.equipped ?? [];
+    const names = state.assignments?.[state.area_index ?? 0] ?? [];
     if (names.length === 0) {
       return [...roster]
         .sort((a, b) => (b.bonus_value ?? 0) - (a.bonus_value ?? 0))
@@ -348,26 +351,35 @@ export class Waifu {
     return roster.filter((w) => names.includes(w.name));
   }
 
-  // Tap-to-equip from the detail overlay: toggles the name in the lane and
-  // evicts oldest-first beyond EQUIP_SLOTS. Returns the post-toggle lane.
-  toggle_equip(state: Pick<GameState, "waifus" | "equipped">, name: string): string[] {
-    const lane = [...(state.equipped ?? [])];
+  // Tap-to-assign from the detail overlay: toggles the name in the CURRENT
+  // area's bucket and evicts oldest-first beyond EQUIP_SLOTS. Returns the
+  // post-toggle lane.
+  toggle_assign(
+    state: Pick<GameState, "assignments" | "area_index">,
+    name: string,
+  ): string[] {
+    const area = state.area_index ?? 0;
+    const lanes = { ...(state.assignments ?? {}) };
+    const lane = [...(lanes[area] ?? [])];
     const i = lane.indexOf(name);
     if (i >= 0) lane.splice(i, 1);
     else lane.push(name);
     while (lane.length > Config.EQUIP_SLOTS) lane.shift();
-    state.equipped = lane;
+    lanes[area] = lane;
+    state.assignments = lanes;
     return lane;
   }
 
   // Consumed by other modules as a [tokenMult, goldMult, expMult] tuple:
-  // the bonuses of the EQUIPPED hires summed per bonus_type, missing
+  // the bonuses of the ASSIGNED hires summed per bonus_type, missing
   // bonus_value guarded to 0.
-  get_bonus_multiplier(state: Pick<GameState, "waifus" | "equipped">): [number, number, number] {
+  get_bonus_multiplier(
+    state: Pick<GameState, "waifus" | "assignments" | "area_index">,
+  ): [number, number, number] {
     let token_mult = 0;
     let gold_mult = 0;
     let exp_mult = 0;
-    for (const w of this.effective_equipped(state)) {
+    for (const w of this.effective_assigned(state)) {
       if (w.bonus_type === "tokens") token_mult += w.bonus_value ?? 0;
       else if (w.bonus_type === "gold") gold_mult += w.bonus_value ?? 0;
       else if (w.bonus_type === "exp") exp_mult += w.bonus_value ?? 0;

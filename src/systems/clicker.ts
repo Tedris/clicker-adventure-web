@@ -141,6 +141,10 @@ export class Clicker {
 
   current_monster: MonsterDef | null = null;
   monster_state = "alive"; // alive, dead, respawning
+  // Multi-hit monster HP (PS99 pace): clicks chip this down and the kill
+  // lands on the death transition. max_hp mirrors the area's monster line.
+  hp = 1;
+  max_hp = 1;
   anim_timer = 0;
   idle_offset = 0;
   humor_line = "";
@@ -190,6 +194,21 @@ export class Clicker {
 
     const idx = Math.floor(Math.random() * available.length);
     this.current_monster = available[idx];
+
+    // PS99 flavor: each area favors its own monster species. The exp-gated
+    // pool still decides what is available; the area tint + name carry the
+    // rest of the identity when a species has not unlocked yet.
+    if (state) {
+      const keyed = Areas.def(state.area_index ?? 0).monster;
+      if (available.some((m) => m.sprite_key === keyed)) {
+        this.current_monster = available.find((m) => m.sprite_key === keyed) ?? this.current_monster;
+      }
+    }
+
+    // Fresh HP from the area ladder; the boss line doubles when the meter
+    // is already full so the milestone reads as a beefier target.
+    this.max_hp = Areas.monster_hp(state ?? { area_index: 0, area_kills: 0 });
+    this.hp = this.max_hp;
     const lines = this.current_monster.humor_lines;
     this.humor_line = lines[Math.floor(Math.random() * lines.length)];
     this.humor_timer = 0;
@@ -273,20 +292,13 @@ export class Clicker {
       state.session_crits = (state.session_crits || 0) + 1;
     }
     // STATS-01/02: lifetime counters ride the SAME payment path as the
-    // session pair — one recorder call reads is_crit once.
+    // session pair — one recorder call reads is_crit once. Kills are a
+    // separate transition below (multi-hit monsters die less often than
+    // they get clicked).
     Stats.record_click(state, is_crit);
 
-    // Areas ladder: every paid click is a kill; the milestone kill advances
-    // the area and rides the existing unlock-message lane.
-    const promoted = Areas.on_kill(state);
-    if (promoted) {
-      this.unlock_message = promoted;
-      this.unlock_message_timer = Config.UNLOCK_MESSAGE_LIFETIME;
-      log(`[INFO] [CLICKER] ${promoted}`);
-    }
-
     log(
-      `[INFO] [CLICKER] Clicked for ${gold_earned} gold, ${exp_earned} exp, ${tokens_earned} tokens`,
+      `[INFO] [CLICKER] Clicked for ${gold_earned} exp ${exp_earned} tokens ${tokens_earned}`,
     );
     if (is_crit) {
       log(
@@ -309,6 +321,25 @@ export class Clicker {
     this.compression_phase = "compressing";
     this.compression_timer = 0;
     this.compression_amount = 0.15;
+
+    // Damage phase: the click chips HP; crits double the hit. The kill —
+    // stats bump, areas ladder tick, death fade — only fires on the death
+    // transition, so a 4-HP goblin dies once after four solid clicks.
+    this.hp = this.hp - Config.BASE_CLICK_VALUE * click_mult * multiplier;
+    if (this.hp > 0) {
+      return { gold: gold_earned, exp: exp_earned, tokens: tokens_earned };
+    }
+    this.hp = 0;
+    Stats.record_kill(state);
+
+    // Areas ladder: each kill counts toward the milestone; the milestone
+    // and boss clicks ride the existing unlock-message lane.
+    const promoted = Areas.on_kill(state);
+    if (promoted) {
+      this.unlock_message = promoted;
+      this.unlock_message_timer = Config.UNLOCK_MESSAGE_LIFETIME;
+      log(`[INFO] [CLICKER] ${promoted}`);
+    }
 
     this.monster_state = "dead";
     this.fade_direction = "out";
@@ -401,6 +432,35 @@ export class Clicker {
       color: pop_color,
     });
   }
+  // One automatic pass from assigned hires (PS99 idle loop): allies times a
+  // click's worth of damage chips the monster, leftover damage carries over
+  // spawns inside the same tick, and every kill walks the same stats +
+  // areas-ladder path as a click death (boss phase included). Returns the
+  // kill count for this tick.
+  auto_tick(state: GameState, allies: number): number {
+    const click_mult = this.upgrades?.get_click_multiplier?.() ?? 1;
+    let dmg = Math.max(1, allies | 0) * Config.BASE_CLICK_VALUE * click_mult;
+    let kills = 0;
+    let guard = 0;
+    while (dmg > 0 && guard++ < 32) {
+      this.hp = this.hp - dmg;
+      if (this.hp > 0) break;
+      const leftover = -this.hp;
+      this.hp = 0;
+      kills = kills + 1;
+      Stats.record_kill(state);
+      const promoted = Areas.on_kill(state);
+      if (promoted) {
+        this.unlock_message = promoted;
+        this.unlock_message_timer = Config.UNLOCK_MESSAGE_LIFETIME;
+      }
+      dmg = leftover;
+      this.spawn_new_monster(state);
+    }
+    if (kills > 0) this._spawn_pop(kills, false, false, false);
+    return kills;
+  }
+
   update(dt: number, state: GameState): void {
     this.anim_timer = this.anim_timer + dt;
 
@@ -679,6 +739,15 @@ export class Clicker {
     }
 
     ctx.restore();
+
+    // HP readout above multi-hit monsters: chips become visible numbers.
+    if (this.max_hp > 1) {
+      ctx.font = `${Config.FONT_SIZE}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      ctx.fillStyle = rgba([235, 235, 245], 0.9);
+      ctx.fillText(`${Math.ceil(this.hp)}/${this.max_hp}`, cx, cy - S / 2 - 14);
+    }
 
     if (this.humor_visible) {
       this._draw_humor_bubble(ctx, cx, cy - Config.MONSTER_SIZE - 10, stage);

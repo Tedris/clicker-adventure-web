@@ -11,8 +11,12 @@ function wi(name: string, bonus_type: string, bonus_value?: number): WaifuInstan
   return { name, bonus_type, bonus_value, rarity: "common" } as unknown as WaifuInstance;
 }
 
-function stateWith(waifus?: WaifuInstance[], equipped?: string[]): GameState {
-  return { waifus, equipped } as unknown as GameState;
+function stateWith(waifus?: WaifuInstance[], lane?: string[]): GameState {
+  return {
+    waifus,
+    area_index: 0,
+    assignments: lane ? { 0: lane } : {},
+  } as unknown as GameState;
 }
 
 describe("Waifu System", () => {
@@ -180,7 +184,7 @@ describe("Waifu System", () => {
     });
   });
 
-  describe("Equip lanes", () => {
+  describe("Area assignments", () => {
     it("empty lane is AUTO: top EQUIP_SLOTS instances by bonus_value count", () => {
       const waifu = new Waifu();
       const roster = [
@@ -192,7 +196,7 @@ describe("Waifu System", () => {
       expect(tm).toBe(0);
     });
 
-    it("named lane counts equipped names only, duplicates stacked", () => {
+    it("named lane counts assigned names only, duplicates stacked", () => {
       const waifu = new Waifu();
       const roster = [
         wi("Hank", "tokens", 0.15), wi("Rosa", "gold", 0.08), wi("Hank", "tokens", 0.18),
@@ -202,16 +206,16 @@ describe("Waifu System", () => {
       expect(gm).toBe(0);
     });
 
-    it("toggle_equip adds, removes and evicts oldest beyond the slots", () => {
+    it("toggle_assign adds, removes and evicts oldest beyond the slots", () => {
       const waifu = new Waifu();
       const st = stateWith([wi("A", "gold", 0.1), wi("B", "gold", 0.1), wi("C", "gold", 0.1), wi("D", "gold", 0.1)]);
-      expect(waifu.toggle_equip(st, "A")).toEqual(["A"]);
-      expect(waifu.toggle_equip(st, "B")).toEqual(["A", "B"]);
-      expect(waifu.toggle_equip(st, "A")).toEqual(["B"]);
-      waifu.toggle_equip(st, "C");
-      const lane = waifu.toggle_equip(st, "D");
+      expect(waifu.toggle_assign(st, "A")).toEqual(["A"]);
+      expect(waifu.toggle_assign(st, "B")).toEqual(["A", "B"]);
+      expect(waifu.toggle_assign(st, "A")).toEqual(["B"]);
+      waifu.toggle_assign(st, "C");
+      const lane = waifu.toggle_assign(st, "D");
       expect(lane).toEqual(["B", "C", "D"]);
-      const evicted = waifu.toggle_equip(st, "A"); // fourth hire pushes the oldest
+      const evicted = waifu.toggle_assign(st, "A"); // fourth hire pushes the oldest
       expect(evicted).toEqual(["C", "D", "A"]);
     });
   });

@@ -100,6 +100,11 @@ export function bar_items(ww: number, wh: number, collapsed?: CollapseOpts) {
   const sess_x = stage.x + stage.w - sess_w;
   const sess_y = bar.y - 4 - sess_h;
   const dbg_x = sess_x - 8 - sess_w;
+  // Areas button (header lane): right end of the HUD row, right of the token
+  // counter's shrunk column. Opens the area menu; same size language as the
+  // toggle buttons.
+  const areas_w = Math.max(48, Math.min(88, Math.floor(z.hud.w * 0.18)));
+  const areas_h = Config.TOGGLE_BTN_HEIGHT;
   return {
     bar,
     pull: { x: Config.PULL_BTN_X, y: bar.y, w: pull_w, h: bar.h },
@@ -109,6 +114,12 @@ export function bar_items(ww: number, wh: number, collapsed?: CollapseOpts) {
     reset: { x: reset_x, y: bar.y, w: Config.RESET_BTN_WIDTH, h: bar.h },
     sess: { x: sess_x, y: sess_y, w: sess_w, h: sess_h },
     dbg: { x: dbg_x, y: sess_y, w: sess_w, h: sess_h },
+    areas: {
+      x: z.hud.x + z.hud.w - areas_w - 8,
+      y: z.hud.y + Math.floor((z.hud.h - areas_h) / 2),
+      w: areas_w,
+      h: areas_h,
+    },
   };
 }
 

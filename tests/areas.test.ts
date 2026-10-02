@@ -181,3 +181,20 @@ describe("Areas.area_bg", () => {
     expect(Areas.area_bg(s)).toEqual(Config.AREAS[1].bg);
   });
 });
+
+describe("Areas.monster_hp", () => {
+  it("climbs with the area ladder and ignores the boss flag", () => {
+    const s = createState();
+    expect(Config.AREA_MONSTER_HP[0]).toEqual(Areas.monster_hp(s));
+    s.area_index = 2;
+    expect(Config.AREA_MONSTER_HP[2]).toEqual(Areas.monster_hp(s));
+    // Meter-full bosses ride the same HP line — the aura marks them.
+    s.area_kills = Config.AREA_KILL_TARGETS[2];
+    expect(true).toEqual(Areas.boss_ready(s));
+    expect(Config.AREA_MONSTER_HP[2]).toEqual(Areas.monster_hp(s));
+    // Hand-built junk indices clamp instead of crashing.
+    expect(Areas.monster_hp({ area_index: 99, area_kills: 0 })).toEqual(
+      Config.AREA_MONSTER_HP[Config.AREA_MONSTER_HP.length - 1],
+    );
+  });
+});

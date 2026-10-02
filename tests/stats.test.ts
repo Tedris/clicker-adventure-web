@@ -11,23 +11,27 @@ function fresh_state(): GameState {
 }
 
 describe("Stats recorder: record_click", () => {
-  it("bumps clicks and kills by exactly 1 on first call and to 2 on the second", () => {
+  it("bumps clicks only; kills ride the separate death recorder", () => {
     const st = fresh_state();
     Stats.record_click(st, false);
     expect(st.stats.clicks).toBe(1);
-    expect(st.stats.kills).toBe(1); // one-hit model
+    expect(st.stats.kills).toBeUndefined(); // kills come from record_kill
     expect(st.stats.crits).toBeUndefined(); // non-crit must not create crits
+    Stats.record_kill(st);
+    expect(st.stats.kills).toBe(1);
     Stats.record_click(st, false);
     expect(st.stats.clicks).toBe(2);
-    expect(st.stats.kills).toBe(2);
+    expect(st.stats.kills).toBe(1);
   });
 
-  it("a crit click bumps clicks, kills AND crits from the single call", () => {
+  it("a crit click bumps clicks AND crits from the single call", () => {
     const st = fresh_state();
     Stats.record_click(st, true);
     expect(st.stats.clicks).toBe(1);
-    expect(st.stats.kills).toBe(1);
+    expect(st.stats.kills).toBeUndefined();
     expect(st.stats.crits).toBe(1);
+    Stats.record_kill(st);
+    expect(st.stats.kills).toBe(1);
   });
 
   it("is nil-safe: a state without a stats table records nothing and does not error", () => {
