@@ -3,6 +3,7 @@
 
 import { describe, it, expect } from "vitest";
 import Upgrades from "../src/systems/upgrades";
+import UpgradePanel from "../src/ui/upgrades_panel";
 import { createState } from "../src/state";
 import type { GameState } from "../src/state";
 
@@ -435,3 +436,12 @@ describe("Upgrades lifetime stats recording (STATS-02)", () => {
 
 
 
+
+describe("UpgradePanel reading order", () => {
+  it("leads with click_multiplier, the rest follow alphabetically", () => {
+    const panel = new UpgradePanel(new Upgrades());
+    const keys = panel.card_keys();
+    expect(keys[0]).toBe("click_multiplier");
+    expect(keys.slice(1)).toEqual([...keys.slice(1)].sort());
+  });
+});

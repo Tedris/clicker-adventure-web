@@ -1,8 +1,7 @@
 // src/systems/prestige.ts
-// Prestige/rebirth system. Pure logic: rebirth points are earned
-// sub-linearly from gold accumulated since the last rebirth (sqrt shape —
-// 1 point at base, 2 at 4x base, 10 at 100x base; anti-hoarding) and drive
-// a persistent GOLD-ONLY multiplier derived from the point total at each
+// Prestige/rebirth system. Pure logic: rebirth points come from lifetime
+// progression record - cleared areas and unlocked badges - and drive a
+// persistent GOLD-ONLY multiplier derived from the point total at each
 // gain site, never stored as its own state field.
 
 import Config from "../config";
@@ -55,16 +54,17 @@ export class Prestige {
     "prestige_gold_since_rebirth",
   ];
 
-  // Points earnable from gold accumulated since the last rebirth. Sub-linear
-  // (exponent < 1). floor() clamps negative/dirty counters to 0.
+  // Points earnable at rebirth time: AREAS CLEARED (highest_area, Clicker
+  // Heroes souls shape - one flat grant per cleared zone) plus one grant per
+  // unlocked badge. Lifetime record only, so hoarded gold never buys a head
+  // start. Missing counters normalize to zero for hand-built states.
   static earnable_points(
-    state: Partial<Pick<GameState, "prestige_gold_since_rebirth">>,
+    state: Partial<Pick<GameState, "highest_area" | "achievements">>,
   ): number {
-    const since = state.prestige_gold_since_rebirth ?? 0;
-    if (since <= 0) return 0;
-    return Math.floor(
-      Math.pow(since / Config.PRESTIGE_GOLD_BASE, Config.PRESTIGE_EXPONENT),
-    );
+    const cleared = Math.max(0, Math.min(state.highest_area ?? 0, Config.AREAS.length - 1));
+    const badges = Object.keys(state.achievements ?? {}).length;
+    return cleared * Config.PRESTIGE_POINTS_PER_AREA_CLEAR
+      + badges * Config.PRESTIGE_POINTS_PER_BADGE;
   }
 
   // Persistent gold-only multiplier, DERIVED from the current point total at

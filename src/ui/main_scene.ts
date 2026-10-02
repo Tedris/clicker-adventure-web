@@ -795,6 +795,13 @@ export class MainScene {
     this._text(ctx, this._fit_text(ctx, `Hires: ${hires}`, m.info_w),
       m.panel.x + pad, y, Config.OFFLINE_REPORT_HINT_COLOR, { align: "center", box: m.info_w });
     y = y + lh;
+    // The chest loop hires from this area's pool - show the newest face.
+    const latest = state.waifus[state.waifus.length - 1];
+    if (latest) {
+      this._text(ctx, this._fit_text(ctx, `Latest hire: ${latest.name} (${latest.rarity})`, m.info_w),
+        m.panel.x + pad, y, Config.OFFLINE_REPORT_HINT_COLOR, { align: "center", box: m.info_w });
+      y = y + lh;
+    }
     const quest = Config.ACHIEVEMENTS.find((d) => d.area === p.index);
     if (quest) {
       const prog = Achievements.get_progress(state, quest.id);
@@ -888,13 +895,14 @@ export class MainScene {
     ctx.fillRect(b.reset.x, b.reset.y, b.reset.w, b.reset.h - 8);
     this._text(ctx, this.reset_armed ? "Sure?" : "Reset", b.reset.x + 8, b.reset.y + 12, Config.POP_COLOR_WHITE);
 
-    // PREST-02 disabled-state legibility: narrate the gold gap to the next
-    // rebirth while no point is earnable yet (hidden at zero progress).
-    const since = state.prestige_gold_since_rebirth ?? 0;
-    if (since > 0 && Prestige.earnable_points(state) < 1) {
-      const needed = Math.max(0, Config.PRESTIGE_GOLD_BASE - since);
+    // PREST-02 disabled-state legibility: narrate what the rebirth still
+    // needs - cleared areas and badges - while no point is earnable yet.
+    if (Prestige.earnable_points(state) < 1) {
+      const cleared = Math.max(0, state.highest_area ?? 0);
+      const badges = Object.keys(state.achievements ?? {}).length;
       const z = this._zones();
-      this._text(ctx, this._fit_text(ctx, `Rebirth in ${Format.number(needed)} gold`, z.stage.w),
+      this._text(ctx, this._fit_text(ctx,
+        `Rebirth: ${cleared} areas cleared, ${badges} badges`, z.stage.w),
         z.stage.x, b.bar.y - 14, Config.OFFLINE_REPORT_HINT_COLOR,
         { align: "center", box: z.stage.w });
     }
@@ -1514,7 +1522,12 @@ export class MainScene {
         if (state && this._pickup_flags(state)[key]) {
           const msg = Areas.harvest(state, key);
           if (msg) {
-            this.fire_event(msg, lanes[key]);
+            let text = msg;
+            if (key === "chest" && this.gacha) {
+              const hire = this.gacha.hire_from_pool(state);
+              if (hire) text = `${msg} · Hire: ${hire.name} (${hire.rarity})`;
+            }
+            this.fire_event(text, lanes[key]);
             if (key !== "chest") this.pickup_cooldown[key] = Config.PICKUP_RESPAWN_SECONDS;
           }
         }

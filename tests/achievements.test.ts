@@ -417,7 +417,8 @@ describe("Achievements — economy immutability", () => {
     const st = full_house();
     st.prestige_points = 0;
     st.prestige_rebirths = 0;
-    st.prestige_gold_since_rebirth = 100 * Config.PRESTIGE_GOLD_BASE;
+    st.prestige_gold_since_rebirth = 100 * 5000;
+    st.highest_area = 5; // cleared areas carry the rebirth
     const ups = {
       upgrades: { ...st.upgrades },
       set_state() {
@@ -449,7 +450,8 @@ describe("Achievements — economy immutability", () => {
 describe("Achievements — rebirth retention", () => {
   it("a real Prestige:rebirth preserves the persisted set and evaluate does not re-report", () => {
     const st = createState();
-    st.prestige_gold_since_rebirth = 100 * Config.PRESTIGE_GOLD_BASE; // >= 1 genuine point
+    st.prestige_gold_since_rebirth = 100 * 5000; // >= 1 genuine point
+    st.highest_area = 5; // cleared areas carry the rebirth
     st.stats = { clicks: 250, kills: 250, crits: 25 };
     st.achievements = { first_click: true, hundred_kills: true };
     const ups = { upgrades: { ...st.upgrades }, set_state() { this.upgrades = {}; } };
@@ -627,7 +629,8 @@ describe("badge payout — exactly once on flip", () => {
     // Pre-marking rebirth_1 keeps this leg measuring the re-pay contract,
     // not the fresh rebirth_1 unlock the success tail would otherwise pay.
     st.achievements.rebirth_1 = true;
-    st.prestige_gold_since_rebirth = 100 * Config.PRESTIGE_GOLD_BASE;
+    st.prestige_gold_since_rebirth = 100 * 5000;
+    st.highest_area = 5; // cleared areas carry the rebirth
     const ups = { upgrades: { ...st.upgrades }, set_state() { this.upgrades = {}; } };
 
     const [ok] = Prestige.rebirth(st, ups);

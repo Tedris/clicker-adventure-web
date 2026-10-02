@@ -408,3 +408,34 @@ describe("Gacha lifetime stats recording (STATS-03)", () => {
     expect(() => new Gacha().pull(state)).not.toThrow();
   });
 });
+
+describe("hire_from_pool (chest hires)", () => {
+  function hireRng(poolIdx: number, rarityRoll: number): RandomFn {
+    const values = [poolIdx, rarityRoll];
+    let i = 0;
+    return () => values[i++ % values.length];
+  }
+
+  it("hires from the CURRENT area's pool without touching tokens", () => {
+    const state = st({ tokens: 3, pity_counter: 7, waifus: [], area_index: 1, stats: {} });
+    const hire = new Gacha(hireRng(1, 0.5)).hire_from_pool(state)!;
+    expect(Config.AREAS[1].pool.includes(hire.name)).toBe(true);
+    expect(hire.bonus_value > 0).toBe(true);
+    expect(state.waifus.length).toBe(1);
+    expect(state.tokens).toBe(3); // a chest hire is not a token pull
+    expect(state.pity_counter).toBe(7); // and it never moves pity
+    expect(state.stats.pulls_total).toBe(1);
+  });
+
+  it("counts a duplicate hire without a unique bump", () => {
+    const first = Config.AREAS[0].pool[0];
+    const state = st({
+      tokens: 0, pity_counter: 0, stats: {}, area_index: 0,
+      waifus: [{ name: first, bonus_type: "gold", bonus_value: 0.05, rarity: "common" }],
+    });
+    const hire = new Gacha(hireRng(1, 0.5)).hire_from_pool(state)!;
+    expect(hire.name).toBe(first);
+    expect(state.stats.unique_hires).toBeUndefined();
+    expect(state.stats.pulls_total).toBe(1);
+  });
+});

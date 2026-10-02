@@ -177,3 +177,31 @@ describe("Offline System - report contract", () => {
     expect(typeof report.exp).toBe("number");
   });
 });
+
+describe("Offline System - assigned-lane scaling", () => {
+  it("only the CURRENT area's lane pays while away", () => {
+    const state = unlocked_state({
+      waifus: [
+        waifu("Rosa the Barista", "gold", 0.08),
+        waifu("Hank the Truck Driver", "gold", 0.15),
+      ],
+      assignments: { 0: ["Rosa the Barista"] },
+    });
+    const report = Offline.apply(state, T0 + 600, null)!;
+    // Rosa (assigned) counts, Hank (other lane) does not.
+    expect(report.gold).toBeCloseTo(600 * Config.PASSIVE_GOLD_RATE * 1.08);
+  });
+
+  it("an empty lane falls back to the top EQUIP_SLOTS by bonus", () => {
+    const waifus = [
+      waifu("A", "gold", 0.01),
+      waifu("B", "gold", 0.02),
+      waifu("C", "gold", 0.03),
+      waifu("D", "gold", 0.04),
+    ];
+    const state = unlocked_state({ waifus });
+    const report = Offline.apply(state, T0 + 600, null)!;
+    // Top EQUIP_SLOTS by value: D + C + B = 0.09 of the four's 0.10 sum.
+    expect(report.gold).toBeCloseTo(600 * Config.PASSIVE_GOLD_RATE * 1.09);
+  });
+});

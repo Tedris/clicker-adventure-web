@@ -88,11 +88,12 @@ export const Config = {
   // ride dt — it routes through the offline system on boot (28800s cap).
   MAX_FRAME_DT: 0.25,
 
-  // Prestige/rebirth: points earned sub-linearly (sqrt shaping) from gold
-  // accumulated since the last rebirth; drives a gold-only multiplier
-  // derived from the point total at each gain site, never stored separately.
-  PRESTIGE_GOLD_BASE: 8000000,
-  PRESTIGE_EXPONENT: 0.5,
+  // Prestige/rebirth (Clicker Heroes shape): points come from AREAS CLEARED
+  // and badges unlocked - lifetime progression record - never from hoarded
+  // gold. Drives a gold-only multiplier derived from the point total at each
+  // gain site, never stored separately.
+  PRESTIGE_POINTS_PER_AREA_CLEAR: 2,
+  PRESTIGE_POINTS_PER_BADGE: 1,
   PRESTIGE_MULTIPLIER_PER_POINT: 0.01,
 
   // Prestige panel (design MAXIMA the layout clamps against the live window).

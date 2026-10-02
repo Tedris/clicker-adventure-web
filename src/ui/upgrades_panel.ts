@@ -54,7 +54,12 @@ export class UpgradePanel {
   constructor(upgrades: Upgrades, event_handler?: PurchaseHandler | null) {
     this.upgrades = upgrades;
     this.event_handler = event_handler ?? null;
-    this.keys = Object.keys(upgrades.Definitions).sort();
+    // Clicker Heroes reading order: Click Damage is the headline track, the
+    // rest follow alphabetically as secondary lines.
+    const all = Object.keys(upgrades.Definitions).sort();
+    this.keys = all.includes("click_multiplier")
+      ? ["click_multiplier", ...all.filter((k) => k !== "click_multiplier")]
+      : all;
   }
 
   card_keys(): string[] {
@@ -240,9 +245,12 @@ export class UpgradePanel {
       ctx.fillRect(pos.x - 1, pos.y - 1, pos.w + 2, pos.h + 2);
     }
 
-    // Icon (1.5x), name, level right-aligned.
+    // Icon (1.5x), name, level right-aligned. The headline track prints its
+    // name larger so the rail reads top-down like Clicker Heroes.
+    const hero = key === "click_multiplier";
     draw_text(ctx, def.icon, pos.x + 8, pos.y + 8, def.color, { size: Config.FONT_SIZE * 1.5 });
-    draw_text(ctx, def.name, pos.x + 24, pos.y + 8, Config.POP_COLOR_WHITE);
+    draw_text(ctx, def.name, pos.x + 24, pos.y + 8, Config.POP_COLOR_WHITE,
+      { size: hero ? Config.FONT_SIZE * 1.25 : Config.FONT_SIZE });
     draw_text(ctx, `Lv:${level}`, pos.x + pos.w - 60, pos.y + 8, [128, 128, 128, 255]);
 
     // Cost text only on full-height cards; compact cards show it on the button.

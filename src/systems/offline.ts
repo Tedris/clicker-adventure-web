@@ -51,10 +51,19 @@ export class Offline {
       }
     }
 
+    // Assigned-hire bonuses (PS99 pet-bag parity with waifu.effective_assigned):
+    // only the CURRENT area's lane pays while away; an empty lane means
+    // "auto" - the top EQUIP_SLOTS instances by bonus_value.
+    const lanes = state.assignments?.[state.area_index ?? 0] ?? [];
+    const roster = state.waifus ?? [];
+    const hires = lanes.length > 0
+      ? roster.filter((w) => lanes.includes(w.name))
+      : [...roster].sort((a, b) => (b.bonus_value ?? 0) - (a.bonus_value ?? 0)).slice(0, Config.EQUIP_SLOTS);
+
     let token_mult = 0;
     let gold_mult = 0;
     let exp_mult = 0;
-    for (const w of state.waifus ?? []) {
+    for (const w of hires) {
       if (w.bonus_type === "tokens") {
         token_mult = token_mult + (w.bonus_value ?? 0);
       } else if (w.bonus_type === "gold") {

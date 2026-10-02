@@ -3,7 +3,8 @@ import Config from "../src/config";
 import { createState, type GameState } from "../src/state";
 import Prestige, { type LiveUpgrades } from "../src/systems/prestige";
 
-const BASE = Config.PRESTIGE_GOLD_BASE;
+const PER_CLEAR = Config.PRESTIGE_POINTS_PER_AREA_CLEAR;
+const PER_BADGE = Config.PRESTIGE_POINTS_PER_BADGE;
 const PER = Config.PRESTIGE_MULTIPLIER_PER_POINT;
 
 // Minimal stand-in for the live Upgrades instance rebirth re-aliases
@@ -26,38 +27,35 @@ function makeUpgrades(initial: Record<string, number>): LiveUpgrades {
 
 describe("Prestige: core economy", () => {
   describe("earnable_points", () => {
-    it("is 0 below the base", () => {
-      expect(Prestige.earnable_points({ prestige_gold_since_rebirth: 0 })).toBe(0);
-      expect(Prestige.earnable_points({ prestige_gold_since_rebirth: BASE - 1 })).toBe(0);
-      expect(Prestige.earnable_points({ prestige_gold_since_rebirth: 1 })).toBe(0);
+    it("is 0 with nothing cleared and no badges", () => {
+      expect(Prestige.earnable_points({ highest_area: 0, achievements: {} })).toBe(0);
     });
 
-    it("is exactly 1 AT the base", () => {
-      expect(Prestige.earnable_points({ prestige_gold_since_rebirth: BASE })).toBe(1);
+    it("grants a flat block per cleared area", () => {
+      expect(Prestige.earnable_points({ highest_area: 1, achievements: {} })).toBe(PER_CLEAR);
+      expect(Prestige.earnable_points({ highest_area: 3, achievements: {} }))
+        .toBe(3 * PER_CLEAR);
     });
 
-    it("is sub-linear past the base (anti-hoard)", () => {
-      expect(Prestige.earnable_points({ prestige_gold_since_rebirth: 4 * BASE })).toBe(2);
-      expect(Prestige.earnable_points({ prestige_gold_since_rebirth: 100 * BASE })).toBe(10);
-      // 4x gold gives < 4x points; 100x gold gives < 100x points.
-      const p1 = Prestige.earnable_points({ prestige_gold_since_rebirth: BASE });
-      const p2 = Prestige.earnable_points({ prestige_gold_since_rebirth: 4 * BASE });
-      expect(p2 < p1 * 4).toBe(true);
-      const p3 = Prestige.earnable_points({ prestige_gold_since_rebirth: BASE });
-      const p4 = Prestige.earnable_points({ prestige_gold_since_rebirth: 100 * BASE });
-      expect(p4 < p3 * 100).toBe(true);
+    it("adds one grant per unlocked badge", () => {
+      const pts = Prestige.earnable_points({ highest_area: 2, achievements: { a: true, b: true } });
+      expect(pts).toBe(2 * PER_CLEAR + 2 * PER_BADGE);
     });
 
-    it("is monotonic non-decreasing over 0..10*base", () => {
-      let prev = 0;
-      for (let g = 0; g <= 10 * BASE; g += Math.floor(BASE / 100)) {
-        const p = Prestige.earnable_points({ prestige_gold_since_rebirth: g });
-        expect(p >= prev, `points went down at gold=${g}`).toBe(true);
-        prev = p;
-      }
+    it("is linear: clears and badges simply add up", () => {
+      const clears = Prestige.earnable_points({ highest_area: 4, achievements: {} });
+      const both = Prestige.earnable_points({ highest_area: 4, achievements: { a: true } });
+      expect(both).toBe(clears + PER_BADGE);
     });
 
-    it("is nil-safe (no counter yet)", () => {
+    it("ignores hoarded gold entirely", () => {
+      const s = createState();
+      s.gold = 999999;
+      s.prestige_gold_since_rebirth = 999999;
+      expect(Prestige.earnable_points(s)).toBe(0);
+    });
+
+    it("is nil-safe (no counters yet)", () => {
       expect(Prestige.earnable_points(createState())).toBe(0);
     });
   });
@@ -86,7 +84,8 @@ describe("Prestige: core economy", () => {
 
   describe("rebirth", () => {
     // A state with every persisted field set to a recognizable value so we
-    // can prove which survive and which reset.
+    // can prove which survive and which reset. Five cleared areas make a
+    // 10-point rebirth immediately earnable.
     function make_state(): GameState {
       const st = createState();
       st.gold = 12345;
@@ -104,7 +103,8 @@ describe("Prestige: core economy", () => {
       st.exp_thresholds_unlocked = { "Spreadsheet Skeleton": true };
       st.prestige_points = 10;
       st.prestige_rebirths = 2;
-      st.prestige_gold_since_rebirth = 100 * BASE;
+      st.highest_area = 5; // five clears x PER_CLEAR = 10 points
+      st.prestige_gold_since_rebirth = 4200;
       st.stats.badge_reward_gold = 5200;
       st.stats.badge_reward_tokens = 168;
       st.upgrades = {
@@ -122,7 +122,7 @@ describe("Prestige: core economy", () => {
       const [ok, gain] = Prestige.rebirth(st, ups);
 
       expect(ok).toBe(true);
-      expect(gain).toBe(10); // 100x base must yield 10 points (sub-linear sqrt)
+      expect(gain).toBe(5 * PER_CLEAR); // five cleared areas
       expect(st).toBe(ref); // state table identity preserved
 
       // KEEP_SET survives with its prior value.
@@ -149,7 +149,7 @@ describe("Prestige: core economy", () => {
       expect(st.stats.badge_reward_tokens).toBe(0);
 
       // Prestige block accumulates.
-      expect(st.prestige_points).toBe(20); // 10 + gain(10)
+      expect(st.prestige_points).toBe(10 + 5 * PER_CLEAR);
       expect(st.prestige_rebirths).toBe(3); // 2 + 1
     });
 
@@ -169,7 +169,7 @@ describe("Prestige: core economy", () => {
 
     it("is a no-op returning false,0 when gain < 1", () => {
       const st = make_state();
-      st.prestige_gold_since_rebirth = BASE - 1; // just short of a point
+      st.highest_area = 0; // nothing cleared, no badges
       const before = st.prestige_points;
       const ups = makeUpgrades({ ...st.upgrades });
 
@@ -215,7 +215,7 @@ describe("Prestige lifetime stats recording", () => {
     const st = createState();
     st.gold = 12345;
     st.exp = 1;
-    st.prestige_gold_since_rebirth = 100 * Config.PRESTIGE_GOLD_BASE;
+    st.highest_area = 5; // five clears make the rebirth earnable
     const ok = Prestige.rebirth(st, null);
     expect(ok[0]).toBe(true); // a gain >= 1 rebirth must complete
     expect(st.stats.rebirths).toBe(1);
@@ -224,9 +224,9 @@ describe("Prestige lifetime stats recording", () => {
   it("a no-op rebirth (gain < 1) records nothing", () => {
     const st = createState();
     st.gold = 12345;
-    st.prestige_gold_since_rebirth = Config.PRESTIGE_GOLD_BASE - 1;
+    st.prestige_gold_since_rebirth = 999999; // gold alone no longer counts
     const [ok, gain] = Prestige.rebirth(st, null);
-    expect(ok).toBeFalsy(); // below base must be a no-op
+    expect(ok).toBeFalsy(); // no cleared area, no badge
     expect(gain).toBe(0);
     expect(st.stats.rebirths).toBeUndefined();
   });

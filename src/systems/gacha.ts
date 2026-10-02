@@ -84,6 +84,27 @@ export class Gacha {
     return { success: false, waifu: null };
   }
 
+  // Free hire from the CURRENT area's pool, paid by a harvested Treasure
+  // Chest (PS99 chest loop): the rarity roll is exactly the pull one, but
+  // pity is untouched - the chest already cost the area's gold meter.
+  hire_from_pool(state: GameState): WaifuInstance | null {
+    if (!state) throw new Error("Gacha:hire_from_pool requires state table");
+    const idx = Math.max(0, Math.min(state.area_index ?? 0, Config.AREAS.length - 1));
+    const pool = Config.AREAS[idx].pool;
+    if (pool.length === 0) return null;
+    const name = pool[this.random(pool.length) - 1];
+    const bonus = Config.WAIFU_BONUS_BY_NAME[name];
+    if (!bonus) return null;
+    const instance = this.make_instance({
+      name, bonus_type: bonus.bonus_type, bonus_value: bonus.bonus_value,
+    });
+    if (!state.waifus) state.waifus = [];
+    const first_time = !state.waifus.some((w) => w.name === instance.name);
+    state.waifus.push(instance);
+    this.record_pull(state, instance.rarity, first_time);
+    return instance;
+  }
+
   get_probability(pity_counter?: number): number {
     const counter = pity_counter ?? 0;
     if (counter >= Config.PITY_HARD) return 1.0;
@@ -151,7 +172,7 @@ export class Gacha {
   // web port folds the pull counters here). Ladder membership is checked via
   // Config.WAIFU_RARITY_BY_KEY so a typo'd rarity never mints a bogus key in
   // the flat string->number stats map the save validator expects.
-  private record_pull(state: GameState, rarity: string, first_time = false): void {
+  record_pull(state: GameState, rarity: string, first_time = false): void {
     const s = state.stats;
     if (!s) return;
     s.pulls_total = (s.pulls_total ?? 0) + 1;
