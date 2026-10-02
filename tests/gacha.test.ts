@@ -162,6 +162,22 @@ describe("Gacha System", () => {
       expect(new Gacha().get_random_waifu()).toBeNull();
       Config.WAIFU_POOL = original;
     });
+
+    it("area 0 keeps the legacy 3-name pool byte-for-byte", () => {
+      const gacha = new Gacha(() => 3); // last index of a 3-entry pool
+      expect(gacha.get_random_waifu(0)!.name).toBe("Linda the Middle Manager");
+    });
+
+    it("later areas join their hires to the pool", () => {
+      // area 1 pool: Karen, Steve, Linda, Dave, Dave (current-area double).
+      const gacha = new Gacha(() => 4);
+      expect(gacha.get_random_waifu(1)!.name).toBe("Dave from IT");
+      // area 5 adds every hire once (Corner Office itself has none; only the
+      // CURRENT area's hires are doubled): Karen, Steve, Linda, Dave, Priya,
+      // Tina, Gus -> index 7 is Gus from Facilities.
+      const deep = new Gacha(() => 7);
+      expect(deep.get_random_waifu(5)!.name).toBe("Gus from Facilities");
+    });
   });
 
   describe("Hard Pity Guarantee", () => {

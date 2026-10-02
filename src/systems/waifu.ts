@@ -75,16 +75,77 @@ const LINDA_PERIODIC_LINES: readonly string[] = [
   "Remember: EXP growth is a team sport. Even if the team is one person.",
 ];
 
+// Area hires: Open Plan, Break Room, Conference Room, Copy Room.
+const DAVE_FIRST_PULL_LINES: readonly string[] = [
+  "I fixed your printer. It was never broken. You just could not.",
+  "Ticket 412: 'screen is black'. Sir, that is called sleep mode.",
+  "I have a cable for that. I also have opinions about your cable management.",
+];
+
+const DAVE_PERIODIC_LINES: readonly string[] = [
+  "Have you tried turning the synergy off and back on again?",
+  "Your Wi-Fi is fine. Your choices are what is questionable.",
+  "I speak fluent IT and mild disappointment.",
+  "The break room projector needs a HDMI hug. I'll be there all lunch.",
+];
+
+const PRIYA_FIRST_PULL_LINES: readonly string[] = [
+  "Your bonus arrived before the quarter ended. You're welcome.",
+  "I do two things: payroll and knowing exactly who left the lights on.",
+  "Direct deposit, direct honesty. That is my whole brand.",
+];
+
+const PRIYA_PERIODIC_LINES: readonly string[] = [
+  "Your timesheet was perfect today. Did it feel weird? It should.",
+  "A raise is just a number with a feeling attached. I attach both.",
+  "The budget says maybe. The budget always says maybe.",
+  "Someone bought a stapler on the company card. I know who. I always know.",
+];
+
+const TINA_FIRST_PULL_LINES: readonly string[] = [
+  "Three departments, two phones, one laminated planner. Let's go.",
+  "I was briefed at 8, promoted at 9, and by 10 I ran this floor.",
+  "Temp does not mean temporary. It means inevitable.",
+];
+
+const TINA_PERIODIC_LINES: readonly string[] = [
+  "I covered your meeting, your lunch and your personality today.",
+  "The front desk is a state of mind. I am it.",
+  "Out of coffee since Tuesday. Still winning.",
+  "Ask me anything. I already answered it for someone else.",
+];
+
+const GUS_FIRST_PULL_LINES: readonly string[] = [
+  "It is 21 degrees. That number is load-bearing.",
+  "I don't fix thermostats. I set them once, correctly, forever.",
+  "The chair stacks are a monument. I built them. Respect them.",
+];
+
+const GUS_PERIODIC_LINES: readonly string[] = [
+  "Someone propped the fire door again. I felt it in my knees.",
+  "The bulbs in the Copy Room are changed. They will need it again.",
+  "A wobbly table is a failed performance review, said no one, ever.",
+  "Laminating is calming. Laminate something today.",
+];
+
 const WAIFU_FIRST_PULL_POOL: Record<string, readonly string[]> = {
   "Karen the Accountant": KAREN_FIRST_PULL_LINES,
   "Steve the HR Rep": STEVE_FIRST_PULL_LINES,
   "Linda the Middle Manager": LINDA_FIRST_PULL_LINES,
+  "Dave from IT": DAVE_FIRST_PULL_LINES,
+  "Priya from Payroll": PRIYA_FIRST_PULL_LINES,
+  "Tina from Temp Agencies": TINA_FIRST_PULL_LINES,
+  "Gus from Facilities": GUS_FIRST_PULL_LINES,
 };
 
 const WAIFU_PERIODIC_POOL: Record<string, readonly string[]> = {
   "Karen the Accountant": KAREN_PERIODIC_LINES,
   "Steve the HR Rep": STEVE_PERIODIC_LINES,
   "Linda the Middle Manager": LINDA_PERIODIC_LINES,
+  "Dave from IT": DAVE_PERIODIC_LINES,
+  "Priya from Payroll": PRIYA_PERIODIC_LINES,
+  "Tina from Temp Agencies": TINA_PERIODIC_LINES,
+  "Gus from Facilities": GUS_PERIODIC_LINES,
 };
 
 export class Waifu {

@@ -35,9 +35,12 @@ export class Prestige {
     "total_tokens_earned",
     // Lifetime counters and the unlocked-achievement set are LIFETIME by
     // definition — a rebirth restarts progression, not the record of
-    // everything ever done.
+    // everything ever done. The areas ladder is lifetime for the same reason:
+    // the area multiplier is the long-term backbone a rebirth builds on.
     "stats",
     "achievements",
+    "area_index",
+    "area_kills",
   ];
 
   static readonly RESET_SET: string[] = [

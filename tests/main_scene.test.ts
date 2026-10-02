@@ -70,6 +70,18 @@ describe("MainScene.draw", () => {
   });
 });
 
+describe("MainScene.draw area line", () => {
+  it("shows the current area and kills-to-boss under the meter", () => {
+    const state = createState();
+    const scene = make_scene(state);
+    scene.load(state);
+    const ctx = stub_ctx();
+    scene.draw(ctx, state, Config.WINDOW_WIDTH, Config.WINDOW_HEIGHT);
+    const recorded = (ctx as unknown as { calls: string[] }).calls.join("|");
+    expect(recorded).toContain(`Area 1: Cubicle · Boss in ${Config.AREA_KILL_TARGETS[0]}`);
+  });
+});
+
 describe("MainScene.mousepressed", () => {
   it("clicking the monster awards gold through Clicker", () => {
     const state = createState();

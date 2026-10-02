@@ -37,6 +37,9 @@ export interface GameState {
   prestige_points: number;
   prestige_rebirths: number;
   prestige_gold_since_rebirth: number;
+  // Areas ladder: current area index + kills inside it (lifetime, survive rebirth).
+  area_index: number;
+  area_kills: number;
   // Session-only artifacts (never persisted).
   offline_report: Record<string, number | string> | null;
   login_report: Record<string, number | string> | null;
@@ -73,6 +76,8 @@ export function createState(nowSeconds?: number): GameState {
     prestige_points: 0,
     prestige_rebirths: 0,
     prestige_gold_since_rebirth: 0,
+    area_index: 0,
+    area_kills: 0,
     offline_report: null,
     login_report: null,
     save_warning: null,

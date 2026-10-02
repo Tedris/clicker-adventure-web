@@ -52,7 +52,7 @@ export class Gacha {
     const probability = this.get_probability(state.pity_counter ?? 0);
     if (this.random() < probability) {
       state.pity_counter = 0;
-      const def = this.get_random_waifu();
+      const def = this.get_random_waifu(state.area_index ?? 0);
       if (!def) {
         if (Config.DEBUG_MODE) {
           console.log("[WARN] [GACHA] Pull succeeded but waifu pool returned nil");
@@ -117,13 +117,31 @@ export class Gacha {
     };
   }
 
-  // Returns the shared Config.WAIFU_POOL definition, NOT an instance: do not
-  // mutate it and do not store it in state (pull() copies via make_instance).
-  get_random_waifu(): WaifuDef | null {
-    const pool = Config.WAIFU_POOL as WaifuDef[] | null;
-    if (!pool || pool.length === 0) {
+  // Returns the shared Config.WAIFU_POOL definition (+ hires from every area
+  // unlocked so far), NOT an instance: do not mutate it and do not store it in
+  // state (pull() copies via make_instance). Current-area hires are listed
+  // twice so the newest area reads as the active hiring pool.
+  get_random_waifu(area_index?: number): WaifuDef | null {
+    const base = Config.WAIFU_POOL as WaifuDef[] | null;
+    if (!base || base.length === 0) {
       console.log("[ERROR] [GACHA] Waifu pool is empty!");
       return null;
+    }
+    const pool: WaifuDef[] = base.slice();
+    const idx = Math.max(0, Math.min(area_index ?? 0, Config.AREAS.length - 1));
+    for (let a = 1; a <= idx; a++) {
+      for (const name of Config.AREAS[a].pool) {
+        const def = Config.WAIFU_BONUS_BY_NAME[name];
+        if (!def) continue;
+        pool.push({ name, bonus_type: def.bonus_type, bonus_value: def.bonus_value });
+      }
+      if (a === idx) {
+        for (const name of Config.AREAS[a].pool) {
+          const def = Config.WAIFU_BONUS_BY_NAME[name];
+          if (!def) continue;
+          pool.push({ name, bonus_type: def.bonus_type, bonus_value: def.bonus_value });
+        }
+      }
     }
     return pool[this.random(pool.length) - 1];
   }

@@ -126,9 +126,11 @@ function writeV1Save(storage: FakeStorage): void {
   });
 }
 
-// The version immediately before the current one, named relative to the
-// constant so a future bump cannot quietly turn this fixture into CURRENT.
-const V2 = Config.SAVE_VERSION - 1;
+// The version that predates the stats/achievements maps, named relative to
+// the constant so a future bump cannot quietly turn this fixture into CURRENT.
+// The v2 fixture exercises the FULL chain (2 -> 3 -> current), so the stats
+// seeding and the areas seeding must BOTH land.
+const V2 = Config.SAVE_VERSION - 2;
 
 function writeV2Save(storage: FakeStorage): void {
   storage.files[Config.SAVE_FILENAME] = JSON.stringify({
@@ -520,9 +522,9 @@ describe("Save config", () => {
     expect(typeof Config.SAVE_FILENAME).toBe("string");
     expect(typeof Config.SAVE_BACKUP_FILENAME).toBe("string");
     expect(Config.SAVE_FILENAME).not.toBe(Config.SAVE_BACKUP_FILENAME);
-    // v3: the stats + achievements maps. Asserted as a concrete number so an
+    // v4: the areas ladder fields. Asserted as a concrete number so an
     // accidental re-tune of the constant is caught.
-    expect(Config.SAVE_VERSION).toBe(3);
+    expect(Config.SAVE_VERSION).toBe(4);
     expect(Config.SAVE_MIN_INTERVAL >= 0.2).toBe(true);
     expect(Config.SAVE_MIN_INTERVAL <= 5).toBe(true);
     expect(typeof Config.RESET_BTN_WIDTH).toBe("number");
@@ -869,8 +871,8 @@ describe("Portability pin (cross-instance round-trip, version stability, bak rec
     expect(upB.upgrades.click_multiplier).toBe(upA.upgrades.click_multiplier);
   });
 
-  it("SAVE_VERSION stays 3 - portability is verified, not rewritten", () => {
-    expect(Config.SAVE_VERSION).toBe(3);
+  it("SAVE_VERSION stays 4 - portability is verified, not rewritten", () => {
+    expect(Config.SAVE_VERSION).toBe(4);
   });
 
   it("corrupt main + intact backup recovers with a warning, next save re-rotates both files", () => {

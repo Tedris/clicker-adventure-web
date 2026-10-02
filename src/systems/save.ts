@@ -65,6 +65,8 @@ export class Save {
     prestige_points: "number",
     prestige_rebirths: "number",
     prestige_gold_since_rebirth: "number",
+    area_index: "number",
+    area_kills: "number",
   };
 
   // Versioned save migrations: each entry upgrades a raw decoded chunk IN
@@ -87,6 +89,14 @@ export class Save {
       raw.stats = raw.stats ?? {};
       raw.achievements = raw.achievements ?? {};
       raw._version = 3;
+      return raw;
+    },
+    // v3 -> v4 seeds the areas ladder: a v3 player never left area 0, so the
+    // fresh defaults ARE the correct history.
+    3: (raw) => {
+      raw.area_index = raw.area_index ?? 0;
+      raw.area_kills = raw.area_kills ?? 0;
+      raw._version = 4;
       return raw;
     },
   };
@@ -222,6 +232,7 @@ export class Save {
       state.gold ?? 0, state.exp ?? 0, state.tokens ?? 0, state.pity_counter ?? 0,
       state.total_gold_earned ?? 0, state.total_exp_earned ?? 0, state.total_tokens_earned ?? 0,
       String(state.passive_unlocked), state.waifus ? state.waifus.length : 0,
+      state.area_index ?? 0, state.area_kills ?? 0,
     ];
     parts.push(Object.keys(state.exp_thresholds_unlocked ?? {}).length);
     const levels: Record<string, number> = upgrades ? upgrades.get_state() : state.upgrades ?? {};

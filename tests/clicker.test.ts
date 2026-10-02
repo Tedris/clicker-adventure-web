@@ -37,6 +37,30 @@ describe("Clicker System", () => {
     expect(clicker.monster_state).toBe("dead");
   });
 
+  it("cleared areas pay a permanent gold multiplier on clicks", () => {
+    const orig = Config.CRIT_CHANCE;
+    Config.CRIT_CHANCE = 0;
+    try {
+      const clicker = new Clicker();
+      const state = st();
+      state.area_index = 2;
+      const rewards = clicker.click(state);
+      expect(rewards.gold).toBeCloseTo(
+        Config.BASE_CLICK_VALUE * (1 + 2 * Config.AREA_GOLD_BONUS_PER_CLEAR), 5);
+    } finally {
+      Config.CRIT_CHANCE = orig;
+    }
+  });
+
+  it("the milestone kill advances the area on the click that lands it", () => {
+    const clicker = new Clicker();
+    const state = st();
+    state.area_kills = Config.AREA_KILL_TARGETS[0] - 1;
+    clicker.click(state);
+    expect(state.area_index).toBe(1);
+    expect(state.area_kills).toBe(0);
+  });
+
   it("prevents clicking dead monsters", () => {
     const clicker = new Clicker();
     clicker.click(st());

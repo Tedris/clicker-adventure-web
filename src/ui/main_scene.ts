@@ -12,6 +12,7 @@ import Layout, { type CollapseOpts, type Rect, type RosterGrid } from "./layout"
 import createState from "../state";
 import { createSpriteCanvas } from "../pixelart";
 import Achievements from "../systems/achievements";
+import Areas from "../systems/areas";
 import Prestige from "../systems/prestige";
 import UpgradePanel from "./upgrades_panel";
 import type { Clicker } from "../systems/clicker";
@@ -367,8 +368,8 @@ export class MainScene {
       return;
     }
 
-    // Background.
-    ctx.fillStyle = rgba(Config.BG_COLOR);
+    // Background (area tint when the ladder has moved past the first area).
+    ctx.fillStyle = rgba(Areas.area_bg(state) as number[]);
     ctx.fillRect(0, 0, width, height);
 
     // Upgrade panel (left rail, behind the monster).
@@ -385,6 +386,7 @@ export class MainScene {
     this.clicker?.draw(ctx, this._zones().stage);
 
     this._draw_kill_meter(ctx, state);
+    this._draw_area_line(ctx, state);
     this._draw_next_goal_line(ctx);
     this._draw_hud(ctx, state);
     this._draw_bottom_bar(ctx, state);
@@ -583,6 +585,18 @@ export class MainScene {
       ctx.fillStyle = rgba(fill);
       ctx.fillRect(rect.x, rect.y, fw, rect.h);
     }
+  }
+
+  // Areas ladder line: current area + how many kills until the milestone
+  // boss, centered under the kill meter.
+  private _draw_area_line(ctx: CanvasRenderingContext2D, state: GameState): void {
+    const z = this._zones();
+    const p = Areas.progress(state);
+    const remaining = Math.max(0, p.needed - p.kills);
+    const meter = Layout.meter_rect(this._w, this._h, this._collapse());
+    const text = `Area ${p.index + 1}: ${p.name} · Boss in ${remaining}`;
+    this._text(ctx, this._fit_text(ctx, text, z.stage.w), z.stage.x, meter.y + meter.h + 4,
+      Config.PITY_NORMAL_COLOR, { align: "center", box: z.stage.w });
   }
 
   // FEEL-02/D-08: plain text line under the HUD while a gated tier remains;

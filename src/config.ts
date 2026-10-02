@@ -81,7 +81,7 @@ export const Config = {
   // upgraded in place by the Save migrations before validation.
   SAVE_FILENAME: "clicker-adventure-save",
   SAVE_BACKUP_FILENAME: "clicker-adventure-save-backup",
-  SAVE_VERSION: 3,
+  SAVE_VERSION: 4,
   SAVE_MIN_INTERVAL: 1.0,
 
   // Max frame dt after a background/minimize gap; economy catch-up does NOT
@@ -177,6 +177,33 @@ export const Config = {
     { name: "Steve the HR Rep", bonus_type: "gold", bonus_value: 0.05 },
     { name: "Linda the Middle Manager", bonus_type: "exp", bonus_value: 0.07 },
   ],
+
+  // Areas ladder: numbered office areas, each with a named milestone boss,
+  // a background tint and hires that join the gacha pool from that area on.
+  // Kill targets are per-area CUMULATIVE-in-area counts; the milestone kill
+  // IS the boss. Clearing an area pays a permanent gold bonus.
+  AREA_KILL_TARGETS: [10, 20, 40, 80, 160, 320],
+  AREA_GOLD_BONUS_PER_CLEAR: 0.25,
+  AREAS: [
+    { name: "Cubicle", boss: "The Printer Jam", bg: [26, 26, 46, 255], pool: ["Karen the Accountant", "Steve the HR Rep", "Linda the Middle Manager"] },
+    { name: "Open Plan", boss: "The All-Hands", bg: [24, 32, 42, 255], pool: ["Dave from IT"] },
+    { name: "Break Room", boss: "The Expired Yogurt", bg: [30, 28, 38, 255], pool: ["Priya from Payroll"] },
+    { name: "Conference Room", boss: "The Meeting That Could Have Been an Email", bg: [28, 24, 36, 255], pool: ["Tina from Temp Agencies"] },
+    { name: "Copy Room", boss: "The Outdated Toner", bg: [22, 30, 34, 255], pool: ["Gus from Facilities"] },
+    { name: "Corner Office", boss: "The Quarterly Close", bg: [36, 28, 26, 255], pool: [] },
+  ] as AreaDef[],
+
+  // Bonus defs for every waifu name across all area pools (area 1 names are
+  // duplicated from WAIFU_POOL so pool building is a single lookup).
+  WAIFU_BONUS_BY_NAME: {
+    "Karen the Accountant": { bonus_type: "tokens", bonus_value: 0.10 },
+    "Steve the HR Rep": { bonus_type: "gold", bonus_value: 0.05 },
+    "Linda the Middle Manager": { bonus_type: "exp", bonus_value: 0.07 },
+    "Dave from IT": { bonus_type: "tokens", bonus_value: 0.12 },
+    "Priya from Payroll": { bonus_type: "gold", bonus_value: 0.06 },
+    "Tina from Temp Agencies": { bonus_type: "exp", bonus_value: 0.08 },
+    "Gus from Facilities": { bonus_type: "tokens", bonus_value: 0.09 },
+  } as Record<string, { bonus_type: string; bonus_value: number }>,
 
   // Roster panel. Panel POSITION/SIZE and the grid are DERIVED from the
   // window via layout.ts; these are card sizing and honest caps.
@@ -322,6 +349,42 @@ export const Config = {
       flavor:
         "Will circle back. She has always circled back. It is her entire personality.",
     },
+    "Dave from IT": {
+      reveal_color: [91, 189, 255, 255],
+      reveal_label: "Dave (has restarted your wizard)",
+      glow_intensity: 0.7,
+      reaction_delay: 0.12,
+      skill: "Have You Tried Restarting It",
+      flavor:
+        "Owns every keyboard on every floor and knows it. Fixes everything except the coffee machine.",
+    },
+    "Priya from Payroll": {
+      reveal_color: [26, 188, 156, 255],
+      reveal_label: "Priya (approved your timesheet)",
+      glow_intensity: 0.75,
+      reaction_delay: 0.1,
+      skill: "Direct Deposit",
+      flavor:
+        "Every bonus she touches lands on time. A rare and beautiful chaos.",
+    },
+    "Tina from Temp Agencies": {
+      reveal_label: "Tina (triple-booked again)",
+      reveal_color: [243, 156, 18, 255],
+      glow_intensity: 0.65,
+      reaction_delay: 0.14,
+      skill: "Infinite Temp Staff",
+      flavor:
+        "Runs three departments with two phones and one laminated planner.",
+    },
+    "Gus from Facilities": {
+      reveal_color: [176, 176, 192, 255],
+      reveal_label: "Gus (fixed the thermostat)",
+      glow_intensity: 0.8,
+      reaction_delay: 0.1,
+      skill: "Optimal Thermostat",
+      flavor:
+        "Sets the office to exactly 21 degrees. Argues for it like it is ancient scripture.",
+    },
   } as Record<string, WaifuPersonality>,
 
   // Rarity ladder, rolled per successful pull (independent of which waifu
@@ -394,6 +457,13 @@ export interface WaifuPersonality {
   reaction_delay: number;
   skill: string;
   flavor: string;
+}
+
+export interface AreaDef {
+  name: string;
+  boss: string;
+  bg: readonly number[];
+  pool: readonly string[];
 }
 
 for (const r of Config.WAIFU_RARITIES) {

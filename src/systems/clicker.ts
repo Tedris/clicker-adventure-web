@@ -6,6 +6,7 @@
 import Config from "../config";
 import Format from "../format";
 import { createSpriteCanvas } from "../pixelart";
+import Areas from "./areas";
 import type { GameState } from "../state";
 import Prestige from "./prestige";
 import Stats from "./stats";
@@ -251,8 +252,10 @@ export class Clicker {
 
     // D-02: prestige multiplier amplifies gold ONLY; exp/tokens stay on the
     // pre-prestige line. Derived live from prestige_points, never stored.
+    // The areas ladder adds its own cleared-area gold multiplier on top.
     const prestige_mult = Prestige.gold_multiplier(state);
-    const gold_earned = base_gold * multiplier * prestige_mult;
+    const area_mult = Areas.gold_multiplier(state);
+    const gold_earned = base_gold * multiplier * prestige_mult * area_mult;
     const exp_earned = base_exp * exp_mult * multiplier;
 
     // `|| 0` guards and the max(0, ...) clamp normalize nil/negative
@@ -272,6 +275,15 @@ export class Clicker {
     // STATS-01/02: lifetime counters ride the SAME payment path as the
     // session pair — one recorder call reads is_crit once.
     Stats.record_click(state, is_crit);
+
+    // Areas ladder: every paid click is a kill; the milestone kill advances
+    // the area and rides the existing unlock-message lane.
+    const promoted = Areas.on_kill(state);
+    if (promoted) {
+      this.unlock_message = promoted;
+      this.unlock_message_timer = Config.UNLOCK_MESSAGE_LIFETIME;
+      log(`[INFO] [CLICKER] ${promoted}`);
+    }
 
     log(
       `[INFO] [CLICKER] Clicked for ${gold_earned} gold, ${exp_earned} exp, ${tokens_earned} tokens`,

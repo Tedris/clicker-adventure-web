@@ -3,6 +3,7 @@
 // Mirrors main.lua: every browser event forwards one step, no game logic.
 
 import Config from "./config";
+import Areas from "./systems/areas";
 import { fit_viewport } from "./viewport";
 import Game from "./game";
 
@@ -57,7 +58,7 @@ function frame(now: number): void {
   game.update(dt);
   const w = fit.logical_w;
   const h = fit.logical_h;
-  const bg = Config.BG_COLOR;
+  const bg = Areas.area_bg(game.state);
   ctx.fillStyle = `rgb(${Math.round(bg[0])}, ${Math.round(bg[1])}, ${Math.round(bg[2])})`;
   ctx.fillRect(0, 0, w, h);
   game.main_scene.draw(ctx, game.state, w, h);
