@@ -68,6 +68,7 @@ export class Save {
     area_index: "number",
     area_kills: "number",
     highest_area: "number",
+    equipped: "string_list",
   };
 
   // Versioned save migrations: each entry upgrades a raw decoded chunk IN
@@ -185,6 +186,9 @@ export class Save {
           list.push(entry);
         }
         out[key] = list;
+      } else if (kind === "string_list") {
+        if (!Array.isArray(v)) return [null, "bad string list field: " + key];
+        out[key] = v.filter((s): s is string => typeof s === "string");
       } else if (kind === "string_to_number" || kind === "string_to_true") {
         if (typeof v !== "object" || Array.isArray(v)) {
           return [null, "bad table field: " + key];
@@ -235,6 +239,7 @@ export class Save {
       state.total_gold_earned ?? 0, state.total_exp_earned ?? 0, state.total_tokens_earned ?? 0,
       String(state.passive_unlocked), state.waifus ? state.waifus.length : 0,
       state.area_index ?? 0, state.area_kills ?? 0, state.highest_area ?? 0,
+      (state.equipped ?? []).join(","),
     ];
     parts.push(Object.keys(state.exp_thresholds_unlocked ?? {}).length);
     const levels: Record<string, number> = upgrades ? upgrades.get_state() : state.upgrades ?? {};

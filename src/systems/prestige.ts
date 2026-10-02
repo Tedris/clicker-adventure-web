@@ -24,6 +24,7 @@ export class Prestige {
   // progress counter a fresh rebirth explicitly zeroes.
   static readonly KEEP_SET: string[] = [
     "waifus",
+    "equipped",
     "tokens",
     "last_login_day",
     "login_streak",

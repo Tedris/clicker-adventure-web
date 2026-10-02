@@ -28,7 +28,7 @@ import PullScreen from "./pull_screen";
 // PREST-02: PERSIST_SCHEME key -> short human label for the prestige panel's
 // keep/reset columns. Unknown keys fall back to the raw key.
 const PRESTIGE_LABELS: Record<string, string> = {
-  waifus: "Waifus", tokens: "Tokens",
+  waifus: "Waifus", equipped: "Equipped waifus", tokens: "Tokens",
   last_login_day: "Daily streak", login_streak: "Daily streak",
   total_gold_earned: "Lifetime stats", total_exp_earned: "Lifetime stats",
   total_tokens_earned: "Lifetime stats",
@@ -125,6 +125,8 @@ export class MainScene {
   prestige_confirm_hover = false;
   stats_panel_open = false;
   stats_scroll_offset = 0;
+  // Area menu modal (zone picker + area info + quest). Runtime-only.
+  area_menu_open = false;
   // Last hover position, for wheel routing without an explicit cursor arg.
   _hover_x: number | null = null;
   _hover_y: number | null = null;
@@ -354,7 +356,26 @@ export class MainScene {
 
   private _roster_grid(): RosterGrid {
     const rail = this._zones().rail_r;
-    return Layout.roster_grid(rail.w, rail.h, this.state?.waifus?.length ?? 0);
+    return Layout.roster_grid(rail.w, rail.h, this._roster_groups().length);
+  }
+
+  // Duplicate hires merge into ONE card (Pet Simulator 99 pet-bag model):
+  // representative = the best copy by bonus_value, count feeds the xN badge.
+  _roster_groups(): Array<{ name: string; count: number; waifu: GameState["waifus"][number] }> {
+    const out: Array<{ name: string; count: number; waifu: GameState["waifus"][number] }> = [];
+    const at: Record<string, number> = {};
+    for (const w of this.state?.waifus ?? []) {
+      if (!w || !w.name) continue;
+      const seen = at[w.name];
+      if (seen === undefined) {
+        at[w.name] = out.length;
+        out.push({ name: w.name, count: 1, waifu: w });
+      } else {
+        out[seen].count += 1;
+        if ((w.bonus_value ?? 0) > (out[seen].waifu.bonus_value ?? 0)) out[seen].waifu = w;
+      }
+    }
+    return out;
   }
 
   draw(ctx: CanvasRenderingContext2D, state: GameState, width: number, height: number): void {
@@ -399,6 +420,7 @@ export class MainScene {
     if (this.waifu_detail_index) this._draw_waifu_detail(ctx);
     if (this.prestige_panel_open) this._draw_prestige_panel(ctx, state);
     if (this.stats_panel_open) this._draw_stats_panel(ctx, state);
+    if (this.area_menu_open) this._draw_area_menu(ctx, state);
 
     // FEEL-03: coalesced event lane drawn ABOVE every panel tier (it must
     // stay visible while a modal is open) but BELOW the welcome-back modal.
@@ -605,6 +627,87 @@ export class MainScene {
       Config.PITY_NORMAL_COLOR, { align: "center", box: nav.prev.w });
     this._text(ctx, p.index < highest ? ">" : "-", nav.next.x, nav.next.y + 5,
       Config.PITY_NORMAL_COLOR, { align: "center", box: nav.next.w });
+
+    // PS99-style node strip: which pickups this area still owes, in harvest
+    // order. Hidden when the second row would touch the bottom bar.
+    const flags = Areas.node_flags(p.kills, p.needed);
+    const on = (v: boolean): string => (v ? "+" : "-");
+    const nodes = `Coins ${on(flags.coins)} Exp ${on(flags.exp)} Chest ${on(flags.chest)}`;
+    const y2 = meter.y + meter.h + 4 + Config.FONT_SIZE + 2;
+    if (y2 + Config.FONT_SIZE <= z.bar.y) {
+      this._text(ctx, this._fit_text(ctx, nodes, z.stage.w), z.stage.x, y2,
+        Config.OFFLINE_REPORT_HINT_COLOR, { align: "center", box: z.stage.w });
+    }
+  }
+
+  // Full-width band under the kill meter: the chevrons walk inside it, and a
+  // tap between them opens the area menu. Shared by draw-adjacent logic and
+  // the click router so both agree on where the strip lives.
+  private _area_bar_rect(): Rect {
+    const z = this._zones();
+    const meter = Layout.meter_rect(this._w, this._h, this._collapse());
+    const y = meter.y + meter.h;
+    return { x: z.stage.x, y, w: z.stage.w, h: Math.max(0, z.bar.y - y) };
+  }
+
+  // Area menu modal: chips pick any unlocked area (instant travel), info
+  // lines narrate the selected area, and the area's quest shows its live
+  // progress. Same chrome language as the stats modal.
+  private _draw_area_menu(ctx: CanvasRenderingContext2D, state: GameState): void {
+    const p = Areas.progress(state);
+    const highest = Math.max(state.highest_area ?? p.index, p.index);
+    const m = Layout.area_menu(this._w, this._h, highest + 1);
+    const pad = Config.LAYOUT_MARGIN;
+
+    ctx.fillStyle = rgba(Config.OFFLINE_REPORT_DIM_COLOR);
+    ctx.fillRect(0, 0, this._w, this._h);
+    ctx.fillStyle = rgba(Config.OFFLINE_REPORT_PANEL_COLOR);
+    ctx.fillRect(m.panel.x, m.panel.y, m.panel.w, m.panel.h);
+    ctx.strokeStyle = rgba(Config.OFFLINE_REPORT_BORDER_COLOR);
+    ctx.lineWidth = 2;
+    ctx.strokeRect(m.panel.x, m.panel.y, m.panel.w, m.panel.h);
+    ctx.lineWidth = 1;
+
+    this._text(ctx, "Areas", m.panel.x + pad, m.panel.y + pad,
+      Config.OFFLINE_REPORT_TITLE_COLOR, { align: "center", box: m.info_w });
+
+    for (let i = 0; i < m.chips.length; i++) {
+      const c = m.chips[i];
+      ctx.fillStyle = rgba(i === p.index
+        ? Config.SUMMON_CIRCLE_COLOR
+        : Config.BG_COLOR.map((v) => v * 1.3) as number[], 0.95);
+      ctx.fillRect(c.x, c.y, c.w, c.h);
+      this._text(ctx, String(i + 1), c.x, c.y + Math.floor((c.h - Config.FONT_SIZE) / 2),
+        Config.POP_COLOR_WHITE, { align: "center", box: c.w });
+    }
+
+    const lh = Config.FONT_SIZE + 4;
+    const remaining = Math.max(0, p.needed - p.kills);
+    let y = m.info_top;
+    this._text(ctx, this._fit_text(ctx, `${p.name} · Boss: ${p.boss}`, m.info_w),
+      m.panel.x + pad, y, Config.POP_COLOR_WHITE, { align: "center", box: m.info_w });
+    y = y + lh;
+    this._text(ctx, `Kills ${p.kills}/${p.needed} · Boss in ${remaining}`,
+      m.panel.x + pad, y, Config.OFFLINE_REPORT_TEXT_COLOR, { align: "center", box: m.info_w });
+    y = y + lh;
+    const hires = Areas.def(p.index).pool.join(", ");
+    this._text(ctx, this._fit_text(ctx, `Hires: ${hires}`, m.info_w),
+      m.panel.x + pad, y, Config.OFFLINE_REPORT_HINT_COLOR, { align: "center", box: m.info_w });
+    y = y + lh;
+    const quest = Config.ACHIEVEMENTS.find((d) => d.area === p.index);
+    if (quest) {
+      const prog = Achievements.get_progress(state, quest.id);
+      const done = Achievements.is_unlocked(state, quest.id);
+      const right = done
+        ? "done"
+        : `${Math.floor(prog?.current ?? 0)}/${quest.goal}`;
+      this._text(ctx, this._fit_text(ctx, `${quest.label} (${right})`, m.info_w),
+        m.panel.x + pad, y, Config.OFFLINE_REPORT_HINT_COLOR, { align: "center", box: m.info_w });
+    }
+
+    this._text(ctx, "tap a chip to travel · tap outside to close", m.panel.x + pad,
+      m.panel.y + m.panel.h + 6, Config.OFFLINE_REPORT_HINT_COLOR,
+      { align: "center", box: m.panel.w });
   }
 
   // Chevron hitboxes flanking the area line, shared by draw and click so a
@@ -697,10 +800,10 @@ export class MainScene {
   }
 
   private _draw_roster(ctx: CanvasRenderingContext2D): void {
-    const state = this.state;
     const rail = this._zones().rail_r;
-    const waifus = state?.waifus ?? [];
-    const total = waifus.length;
+    const groups = this._roster_groups();
+    const total = groups.length;
+    const equipped = this.state?.equipped ?? [];
     const g = Layout.roster_grid(rail.w, rail.h, total);
     const scroll = this.roster_scroll_offset;
     const pad = Config.ROSTER_PANEL_PADDING;
@@ -722,8 +825,9 @@ export class MainScene {
     for (let i = 1; i <= total; i++) {
       const s_rect = Layout.roster_slot(rail, g, i, scroll);
       if (s_rect.y + s_rect.h >= rail.y + g.grid_top && s_rect.y <= rail.y + rail.h) {
-        const waifu = waifus[i - 1];
-        if (waifu && waifu.name) {
+        const group = groups[i - 1];
+        if (group && group.name) {
+          const waifu = group.waifu;
           const is_hovered = this.roster_hover_index === i;
 
           ctx.fillStyle = rgba(Config.BG_COLOR, 0.92);
@@ -765,6 +869,17 @@ export class MainScene {
             bonus_text = `+${waifu.bonus_value ?? 0}`;
           }
           this._text(ctx, this._fit_text(ctx, bonus_text, cs - 4), s_rect.x + 2, s_rect.y + cs + 13, bonus_color);
+
+          // Equip dot + duplicate badge: who is on the clock, and how many
+          // copies back it up — both without leaving the card.
+          if (equipped.includes(waifu.name)) {
+            ctx.fillStyle = rgba(Config.POP_COLOR_GOLD);
+            ctx.fillRect(s_rect.x + cs / 2 - 2, s_rect.y + 2, 4, 4);
+          }
+          if (group.count > 1) {
+            this._text(ctx, `x${group.count}`, s_rect.x + 2, s_rect.y + cs + 13,
+              Config.POP_COLOR_GOLD, { align: "right", box: cs - 4 });
+          }
         }
       }
     }
@@ -799,13 +914,13 @@ export class MainScene {
   _roster_slot_at(x: number, y: number): number | null {
     const rail = this._zones().rail_r;
     if (x < rail.x || x > rail.x + rail.w || y < rail.y || y > rail.y + rail.h) return null;
-    const waifus = this.state?.waifus ?? [];
-    const grid = Layout.roster_grid(rail.w, rail.h, waifus.length);
-    for (let i = 1; i <= waifus.length; i++) {
+    const groups = this._roster_groups();
+    const grid = Layout.roster_grid(rail.w, rail.h, groups.length);
+    for (let i = 1; i <= groups.length; i++) {
       const s_rect = Layout.roster_slot(rail, grid, i, this.roster_scroll_offset);
       if (x >= s_rect.x && x <= s_rect.x + s_rect.w && y >= s_rect.y && y <= s_rect.y + s_rect.h) {
-        const waifu = waifus[i - 1];
-        return waifu && waifu.name ? i : null;
+        const group = groups[i - 1];
+        return group && group.name ? i : null;
       }
     }
     return null;
@@ -950,9 +1065,10 @@ export class MainScene {
   // Waifu status overlay: big portrait, FULL name, rarity banner, cheat
   // skill and flavor text — any click/key dismisses it.
   private _draw_waifu_detail(ctx: CanvasRenderingContext2D): void {
-    const waifus = this.state?.waifus ?? [];
+    const groups = this._roster_groups();
     const idx = this.waifu_detail_index ?? 0;
-    const waifu = waifus[idx - 1];
+    const group = groups[idx - 1];
+    const waifu = group?.waifu ?? null;
     if (!waifu || !waifu.name) {
       this.waifu_detail_index = null;
       return;
@@ -993,16 +1109,40 @@ export class MainScene {
       y = this._text_lines(ctx, `+${Math.round((waifu.bonus_value ?? 0) * 100)}% ${bonus_label}`,
         d.inner.x, y, d.inner.w, Config.POP_COLOR_WHITE);
     }
+    if ((group?.count ?? 1) > 1) {
+      y = this._text_lines(ctx, `Copies: ${group?.count}`, d.inner.x, y, d.inner.w, Config.POP_COLOR_GOLD);
+    }
     y = this._text_lines(ctx, "Cheat Skill: " + (personality?.skill ?? "Office Synergy"),
       d.inner.x, y, d.inner.w, Config.POP_COLOR_WHITE);
     if (personality?.flavor) {
-      this._text_lines(ctx, `"${personality.flavor}"`, d.inner.x, y, d.inner.w, Config.WAIFU_HUMOR_COLOR);
+      y = this._text_lines(ctx, `"${personality.flavor}"`, d.inner.x, y, d.inner.w, Config.WAIFU_HUMOR_COLOR);
     }
+
+    // Equip lane button: swaps this hire in/out of the active trio. Kept
+    // above the dismiss line so tapping the button never also closes.
+    const btn = this._equip_btn();
+    const on_clock = (this.state?.equipped ?? []).includes(waifu.name);
+    ctx.fillStyle = rgba(on_clock ? Config.POP_COLOR_GOLD : Config.BG_COLOR.map((v) => v * 1.4) as number[], 0.95);
+    ctx.fillRect(btn.x, btn.y, btn.w, btn.h);
+    this._text(ctx, this._fit_text(ctx, on_clock ? "Equipped - tap to swap out" : "Tap to equip", btn.w - 8),
+      btn.x + 4, btn.y + (btn.h - Config.FONT_SIZE) / 2, Config.POP_COLOR_WHITE);
 
     // Phase 15 (INP-04): dismiss affordance on the panel bottom pad line.
     this._text(ctx, "tap anywhere to close", d.inner.x,
       d.panel.y + d.panel.h - Config.LAYOUT_MARGIN - Config.FONT_SIZE,
       Config.OFFLINE_REPORT_HINT_COLOR, { align: "center", box: d.inner.w });
+  }
+
+  // Equip button rect, shared by the detail draw and its click handler.
+  _equip_btn(): Rect {
+    const d = Layout.waifu_detail(this._w, this._h);
+    const h = Math.max(22, Config.FONT_SIZE + 8);
+    return {
+      x: d.inner.x,
+      y: d.panel.y + d.panel.h - Config.LAYOUT_MARGIN - Config.FONT_SIZE - h - 6,
+      w: d.inner.w,
+      h,
+    };
   }
   // PREST-02: centered review modal. Reuses the welcome-back visual language
   // and the reset-modal two-step arm/confirm. Lists iterate the system's
@@ -1160,6 +1300,14 @@ export class MainScene {
       return true;
     }
     if (this.waifu_detail_index) {
+      // Equip button first: a tap on it swaps the hire and keeps the overlay
+      // open; any other tap dismisses as before.
+      const btn = this._equip_btn();
+      if (state && x >= btn.x && x <= btn.x + btn.w && y >= btn.y && y <= btn.y + btn.h) {
+        const group = this._roster_groups()[this.waifu_detail_index - 1];
+        if (group && this.waifu) this.waifu.toggle_equip(state, group.name);
+        return true;
+      }
       this.waifu_detail_index = null;
       return true;
     }
@@ -1184,6 +1332,27 @@ export class MainScene {
     if (this.stats_panel_open) {
       this.stats_panel_open = false;
       this.stats_scroll_offset = 0;
+      return true;
+    }
+    // Area menu modal: chips walk the position (Areas.walk_to clamps to
+    // highest_area); clicks inside the panel body are inert, clicks outside
+    // close. The modal never falls through to the gameplay layer.
+    if (this.area_menu_open) {
+      const highest = Math.max(
+        state?.highest_area ?? state?.area_index ?? 0,
+        state?.area_index ?? 0,
+      );
+      const m = Layout.area_menu(this._w, this._h, highest + 1);
+      for (let i = 0; i < m.chips.length; i++) {
+        const c = m.chips[i];
+        if (x >= c.x && x <= c.x + c.w && y >= c.y && y <= c.y + c.h) {
+          if (state) Areas.walk_to(state, i);
+          return true;
+        }
+      }
+      const inside = x >= m.panel.x && x <= m.panel.x + m.panel.w
+        && y >= m.panel.y && y <= m.panel.y + m.panel.h;
+      if (!inside) this.area_menu_open = false;
       return true;
     }
     // Rail chevrons collapse/expand; while collapsed, any tap on the strip
@@ -1218,7 +1387,16 @@ export class MainScene {
         return true;
       }
     }
-    return this._click_at(x, y);
+    // Gameplay first: monster, rails, bars keep priority on the strip. Only
+    // a dead click on the meter strip falls through to opening the menu.
+    if (this._click_at(x, y)) return true;
+    const area_band = this._area_bar_rect();
+    if (x >= area_band.x && x <= area_band.x + area_band.w
+      && y >= area_band.y && y < area_band.y + area_band.h) {
+      this.area_menu_open = !this.area_menu_open;
+      return true;
+    }
+    return false;
   }
 
   // Gameplay hit-test body: reset arm/disarm, roster cards, monster hitbox
@@ -1333,6 +1511,7 @@ export class MainScene {
     this._hover_x = x;
     this._hover_y = y;
     if (this.showing_pull_screen || this.waifu_detail_index || this.stats_panel_open ||
+        this.area_menu_open ||
         (this.state && (this.state.offline_report || this.state.login_report))) {
       this.prestige_confirm_hover = false;
       return;
@@ -1355,7 +1534,7 @@ export class MainScene {
     if (dx === 0 && dy === 0) return;
     if (mx === undefined) { mx = this._hover_x ?? undefined; my = this._hover_y ?? undefined; }
     const amount = -dy * Config.ROSTER_SCROLL_SPEED;
-    if (this.showing_pull_screen || this.waifu_detail_index) return;
+    if (this.showing_pull_screen || this.waifu_detail_index || this.area_menu_open) return;
     if (this.stats_panel_open) {
       const sp = Layout.stats_panel(this._w, this._h, Config.ACHIEVEMENTS.length);
       this.stats_scroll_offset = Math.max(0, Math.min(sp.list.max_scroll, this.stats_scroll_offset + amount));
@@ -1394,6 +1573,10 @@ export class MainScene {
     if (this.stats_panel_open) {
       this.stats_panel_open = false;
       this.stats_scroll_offset = 0;
+      return;
+    }
+    if (this.area_menu_open) {
+      this.area_menu_open = false;
       return;
     }
     if (this.debug) this.debug.keypressed(key);

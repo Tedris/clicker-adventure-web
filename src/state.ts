@@ -42,6 +42,9 @@ export interface GameState {
   area_kills: number;
   // Furthest area ever reached; travel chevrons move area_index within it.
   highest_area: number;
+  // Waifu equip lanes: names of hires on the clock (max Config.EQUIP_SLOTS).
+  // Empty/undefined means "auto": the top bonus_value instances are active.
+  equipped?: string[];
   // Session-only artifacts (never persisted).
   offline_report: Record<string, number | string> | null;
   login_report: Record<string, number | string> | null;
@@ -81,6 +84,7 @@ export function createState(nowSeconds?: number): GameState {
     area_index: 0,
     area_kills: 0,
     highest_area: 0,
+    equipped: [],
     offline_report: null,
     login_report: null,
     save_warning: null,

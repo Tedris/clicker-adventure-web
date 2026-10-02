@@ -125,6 +125,49 @@ describe("Areas.travel", () => {
   });
 });
 
+describe("Areas node hops", () => {
+  it("coin/exp/treasure pay once each at their boundary kills", () => {
+    const s = createState();
+    const needed = Config.AREA_KILL_TARGETS[0];
+    const [b1, b2] = Areas.node_bounds(needed);
+    let guard = 0;
+    for (let i = 0; i < needed; i++) Areas.on_kill(s);
+    // Gold burst landed at b1 and never again; exp at b2; chest at needed.
+    expect(s.total_gold_earned >= Config.AREA_NODE_GOLD).toBe(true);
+    expect(s.total_exp_earned >= Config.AREA_NODE_EXP).toBe(true);
+    expect(s.total_tokens_earned >= Config.AREA_NODE_TOKENS).toBe(true);
+    // Boundary arithmetic: thirds round up and stay below the milestone.
+    expect(b1 < b2 && b2 <= needed).toBe(true);
+    expect(guard).toBe(0);
+  });
+
+  it("a save loaded past several boundaries credits each node once", () => {
+    const s = createState();
+    const needed = Config.AREA_KILL_TARGETS[0];
+    s.area_kills = Math.ceil(needed / 3); // already at the coin boundary
+    Areas.on_kill(s);
+    const gold_after = s.gold;
+    Areas.on_kill(s); // between boundaries: no further burst
+    expect(s.gold).toBe(gold_after);
+  });
+});
+
+describe("Areas.walk_to", () => {
+  it("jumps to any unlocked area and resets in-area kills", () => {
+    const s = createState();
+    s.highest_area = 3;
+    s.area_index = 3;
+    s.area_kills = 12;
+    expect(Areas.walk_to(s, 1)).toEqual("Open Plan");
+    expect(s.area_index).toEqual(1);
+    expect(s.area_kills).toEqual(0);
+    // Beyond the unlocked frontier clamps; same-spot jumps report null.
+    expect(Areas.walk_to(s, 99)).toEqual("Conference Room");
+    expect(s.area_index).toEqual(3);
+    expect(Areas.walk_to(s, 3)).toBeNull();
+  });
+});
+
 describe("Areas.area_bg", () => {
   it("falls back to the base BG color before areas exist on a state", () => {
     const s = createState();

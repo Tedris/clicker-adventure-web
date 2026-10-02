@@ -17,11 +17,31 @@ export interface AreaProgress {
   progress: number;
 }
 
+export interface NodeFlags {
+  coins: boolean;
+  exp: boolean;
+  chest: boolean;
+}
+
 export class Areas {
   // Definition lookup with a clamp so hand-built states never crash a draw.
   static def(index: number) {
     const i = Math.max(0, Math.min(index | 0, Config.AREAS.length - 1));
     return Config.AREAS[i];
+  }
+
+  // Node boundaries inside one area's kill target, PS99 strip order:
+  // Coin pile at 1/3, EXP orb at 2/3, Treasure Chest with the milestone.
+  static node_bounds(needed: number): [number, number] {
+    return [Math.ceil(needed / 3), Math.ceil((needed * 2) / 3)];
+  }
+
+  // Which nodes are harvested at a given kill count (crossing-jump safe:
+  // a loaded save already past a boundary reads as harvested, once).
+  static node_flags(kills: number, needed: number): NodeFlags {
+    const [b1, b2] = Areas.node_bounds(needed);
+    const k = Math.max(0, kills | 0);
+    return { coins: k >= b1, exp: k >= b2, chest: k >= needed };
   }
 
   // Meter/readout tuple for the current area: kills-in-area vs the target.
@@ -40,14 +60,42 @@ export class Areas {
     };
   }
 
+  // Flat lifetime credit for a harvested node: gold touches the totals and
+  // the since-rebirth counter like every other gain site; exp/tokens ride
+  // their lifetime totals. No multipliers — the bursts are meant to feel
+  // like flat, legible pickups between clicks.
+  private static _credit(state: GameState, gold: number, exp: number, tokens: number): void {
+    if (gold > 0) {
+      state.gold = Math.max(0, (state.gold ?? 0) + gold);
+      state.total_gold_earned = (state.total_gold_earned ?? 0) + gold;
+      state.prestige_gold_since_rebirth = (state.prestige_gold_since_rebirth ?? 0) + gold;
+    }
+    if (exp > 0) {
+      state.exp = Math.max(0, (state.exp ?? 0) + exp);
+      state.total_exp_earned = (state.total_exp_earned ?? 0) + exp;
+    }
+    if (tokens > 0) {
+      state.tokens = (state.tokens ?? 0) + tokens;
+      state.total_tokens_earned = (state.total_tokens_earned ?? 0) + tokens;
+    }
+  }
+
   // One kill in. Returns a toast line when the milestone kill advanced the
-  // area (boss defeated), or null on a plain kill. The milestone also lifts
-  // highest_area, the furthest unlocked area that travel chevrons walk back
-  // into; cleared-area bonuses read highest_area, never the walked-back row.
+  // area (boss defeated), or null on a plain kill. Each harvested node
+  // (Coin pile, EXP orb, Treasure Chest) pays once on its boundary crossing.
+  // The milestone also lifts highest_area, the furthest unlocked area that
+  // travel chevrons walk back into; cleared-area bonuses read highest_area,
+  // never the walked-back row.
   static on_kill(state: GameState): string | null {
     const idx = Math.max(0, Math.min(state.area_index ?? 0, Config.AREAS.length - 1));
-    state.area_kills = (state.area_kills ?? 0) + 1;
+    const prev = Math.max(0, state.area_kills ?? 0);
+    state.area_kills = prev + 1;
+    const k = state.area_kills;
     const needed = Config.AREA_KILL_TARGETS[idx];
+    const [b1, b2] = Areas.node_bounds(needed);
+    if (prev < b1 && k >= b1) Areas._credit(state, Config.AREA_NODE_GOLD, 0, 0);
+    else if (prev < b2 && k >= b2) Areas._credit(state, 0, Config.AREA_NODE_EXP, 0);
+    if (prev < needed && k >= needed) Areas._credit(state, 0, 0, Config.AREA_NODE_TOKENS);
     if (state.area_kills >= needed && idx < Config.AREAS.length - 1) {
       state.area_index = idx + 1;
       state.highest_area = Math.max(state.highest_area ?? idx, idx + 1);
@@ -68,6 +116,22 @@ export class Areas {
     );
     const from = Math.max(0, Math.min(state.area_index ?? 0, Config.AREAS.length - 1));
     const to = Math.max(0, Math.min(from + direction, highest));
+    if (to === from) return null;
+    state.area_index = to;
+    state.area_kills = 0;
+    return Config.AREAS[to].name;
+  }
+
+  // Jump straight to an unlocked area (the area menu's chips). Same edge
+  // semantics as travel(): clamped to 0..highest_area, kills reset on move,
+  // null when nothing moved.
+  static walk_to(state: GameState, target: number): string | null {
+    const highest = Math.max(
+      state.highest_area ?? state.area_index ?? 0,
+      state.area_index ?? 0,
+    );
+    const to = Math.max(0, Math.min(target | 0, highest));
+    const from = Math.max(0, Math.min(state.area_index ?? 0, Config.AREAS.length - 1));
     if (to === from) return null;
     state.area_index = to;
     state.area_kills = 0;

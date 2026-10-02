@@ -106,7 +106,7 @@ describe("Achievements:evaluate — detection", () => {
 
 describe("Achievements — idempotence rides the persisted set", () => {
   it("an already-true ID is not re-reported even when its metric is far past goal", () => {
-    const st = stateWith({ clicks: 5000 }, { first_click: true });
+    const st = stateWith({ clicks: 5000 }, { first_click: true, q_cubicle_clicks: true });
     expect(Achievements.evaluate(st)).toEqual([]);
   });
 
@@ -134,7 +134,7 @@ describe("Achievements — idempotence rides the persisted set", () => {
     const reloaded = createState();
     reloaded.stats = copy_map(st.stats);
     reloaded.achievements = copy_map(st.achievements);
-    expect(count_keys(reloaded.achievements)).toBe(3);
+    expect(count_keys(reloaded.achievements)).toBe(4); // three curated badges + the Clicks quest
     expect(Achievements.evaluate(reloaded)).toEqual([]);
   });
 
@@ -332,7 +332,7 @@ describe("Achievements — adjacent values on a shared metric stay separate", ()
     st.stats = { clicks: 100, kills: 100 };
     st.achievements = {};
     const newly = Achievements.evaluate(st);
-    expect(newly).toEqual(["first_click", "hundred_kills"]);
+    expect(newly).toEqual(["first_click", "hundred_kills", "q_cubicle_clicks"]);
     expect(newly[0]).not.toBe(newly[1]); // adjacent badges keep distinct IDs
     Achievements.mark_unlocked(st, newly);
     st.stats.clicks = 101;
@@ -358,7 +358,7 @@ describe("Achievements — ordering determinism", () => {
   it("simultaneously-satisfied badges at non-adjacent positions return in config order", () => {
     // first_click (pos 1), first_crit (pos 5), upgrades_500 (pos 12).
     const st = stateWith({ clicks: 1, crits: 1, upgrades_bought: 500 });
-      expect(Achievements.evaluate(st)).toEqual(["first_click", "first_crit", "upgrades_500"]);
+      expect(Achievements.evaluate(st)).toEqual(["first_click", "first_crit", "upgrades_500", "q_openplan_upgrades"]);
   });
 });
 
@@ -371,8 +371,8 @@ describe("Achievements — economy immutability", () => {
     st.pity_counter = 3;
     // One state satisfying every curated definition simultaneously:
     st.stats = {
-      clicks: 1, kills: 10000, crits: 5000,
-      pulls_total: 1, pulls_rare: 23, pulls_epic: 7, pulls_legendary: 1,
+      clicks: 25, kills: 10000, crits: 5000,
+      pulls_total: 10, pulls_rare: 23, pulls_epic: 7, pulls_legendary: 1,
       upgrades_bought: 500, rebirths: 2, play_time: 3600, unique_hires: 15,
     };
     return st;

@@ -317,6 +317,34 @@ export function waifu_detail(ww: number, wh: number) {
   };
 }
 
+// Area menu modal (Clicker Heroes zone picker): centered panel with one chip
+// per unlocked area, then the info lines below. Chips are returned as ready
+// rects so draw and hit-test share one row geometry; at least one chip is
+// always laid out, and the row shrinks chips honestly when the panel gets
+// narrow (never wraps — the count is capped by AREAS.length anyway).
+export function area_menu(ww: number, wh: number, count: number) {
+  const pad = Config.LAYOUT_MARGIN;
+  const pw = Math.min(Config.AREA_MENU_WIDTH, ww - pad * 2);
+  const ph = Math.min(Config.AREA_MENU_HEIGHT, wh - pad * 2);
+  const px = Math.floor((ww - pw) / 2);
+  const py = Math.floor((wh - ph) / 2);
+  const n = Math.max(1, count | 0);
+  const gap = 6;
+  const chip_w = Math.max(24, Math.min(56, Math.floor((pw - pad * 2 - gap * (n - 1)) / n)));
+  const chips_h = Math.max(22, Config.FONT_SIZE + 8);
+  const chips_y = py + pad + Config.FONT_SIZE + 8;
+  const chips: Rect[] = [];
+  for (let i = 0; i < n; i++) {
+    chips.push({ x: px + pad + i * (chip_w + gap), y: chips_y, w: chip_w, h: chips_h });
+  }
+  return {
+    panel: { x: px, y: py, w: pw, h: ph },
+    chips,
+    info_top: chips_y + chips_h + 10,
+    info_w: pw - pad * 2,
+  };
+}
+
 const Layout = {
   rail_width,
   rail_tab,
@@ -331,6 +359,7 @@ const Layout = {
   roster_slot,
   pull_geometry,
   waifu_detail,
+  area_menu,
 };
 
 export default Layout;

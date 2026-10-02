@@ -184,6 +184,20 @@ export const Config = {
   // IS the boss. Clearing an area pays a permanent gold bonus.
   AREA_KILL_TARGETS: [10, 20, 40, 80, 160, 320],
   AREA_GOLD_BONUS_PER_CLEAR: 0.25,
+  // PS99-style node hops inside an area: the kill target splits into a Coin
+  // pile, an EXP orb and a Treasure Chest (in that harvest order), each
+  // paid once when its boundary kill lands. The milestone boss is the last
+  // boundary. Bursts are flat so early areas feel chunky without scaling.
+  AREA_NODE_GOLD: 10,
+  AREA_NODE_EXP: 10,
+  AREA_NODE_TOKENS: 5,
+  // Waifu equip lanes (Pet-Simulator-style): only equipped hires pay their
+  // bonus, so picking the trio is a real decision. Oldest-first eviction.
+  EQUIP_SLOTS: 3,
+  // Area menu modal (Clicker Heroes zone picker): centered panel with an
+  // area-chip row, current-area info and the area quest line.
+  AREA_MENU_WIDTH: 340,
+  AREA_MENU_HEIGHT: 250,
   AREAS: [
     { name: "Cubicle", boss: "The Printer Jam", bg: [26, 26, 46, 255], pool: ["Karen the Accountant", "Steve the HR Rep", "Linda the Middle Manager"] },
     { name: "Open Plan", boss: "The All-Hands", bg: [24, 32, 42, 255], pool: ["Dave from IT", "Maya the Scrum Coach"] },
@@ -520,7 +534,16 @@ export const Config = {
     { id: "rebirth_2", label: "Onboarded Again", metric: "rebirths", goal: 2, tier: "bronze" },
     { id: "playtime_3600", label: "Full Shift Completed", metric: "play_time", goal: 3600, tier: "gold" },
     { id: "hire_everyone", label: "Whole Staff Onboarded", metric: "unique_hires", goal: 15, tier: "gold" },
-  ],
+    // Area quests: one curated line per area (area = AREAS index), shown in
+    // the area menu and paid once through the SAME badge lane as the rest of
+    // the roster. Metrics reuse the canonical stats keys.
+    { id: "q_cubicle_clicks", label: "Punch In: click 25 times", metric: "clicks", goal: 25, tier: "bronze", area: 0 },
+    { id: "q_openplan_upgrades", label: "Squad Sync: buy 10 upgrades", metric: "upgrades_bought", goal: 10, tier: "bronze", area: 1 },
+    { id: "q_breakroom_crits", label: "Extra Shot: land 50 crits", metric: "crits", goal: 50, tier: "bronze", area: 2 },
+    { id: "q_conference_pulls", label: "Headcount: 10 summons", metric: "pulls_total", goal: 10, tier: "silver", area: 3 },
+    { id: "q_copyroom_crits", label: "Night Haul: land 250 crits", metric: "crits", goal: 250, tier: "silver", area: 4 },
+    { id: "q_corner_hires", label: "Full Floor: hire 10 staff", metric: "unique_hires", goal: 10, tier: "gold", area: 5 },
+  ] as AchievementDef[],
 
   // Tier -> one-time achievement rewards, paid once by the unlock flip-guard.
   // Badge gold rides the prestige multiplier at the payment site; tokens don't.
@@ -545,6 +568,15 @@ export interface AreaDef {
   boss: string;
   bg: readonly number[];
   pool: readonly string[];
+}
+
+export interface AchievementDef {
+  id: string;
+  label: string;
+  metric: string;
+  goal: number;
+  tier: string;
+  area?: number;
 }
 
 for (const r of Config.WAIFU_RARITIES) {

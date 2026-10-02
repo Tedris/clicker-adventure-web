@@ -255,3 +255,80 @@ describe("Waifu detail text wrapping", () => {
     expect(overlay.some((t) => t.startsWith('"Keeps her feelings'))).toBe(true);
   });
 });
+
+describe("Area menu modal and equip lanes", () => {
+  function sized_scene(state: GameState): MainScene {
+    const scene = make_scene(state);
+    scene.load(state);
+    scene.draw(stub_ctx(), state, Config.WINDOW_WIDTH, Config.WINDOW_HEIGHT);
+    return scene;
+  }
+
+  it("a dead click on the meter strip opens the area menu; a key closes it", () => {
+    const state = createState();
+    const scene = sized_scene(state);
+    const z = Layout.zones(Config.WINDOW_WIDTH, Config.WINDOW_HEIGHT);
+    const meter = Layout.meter_rect(Config.WINDOW_WIDTH, Config.WINDOW_HEIGHT);
+    // Mid-strip between the chevrons, below the monster hitbox: a lane no
+    // other handler claims.
+    const x = z.stage.x + Math.floor(z.stage.w / 2);
+    const y = Math.min(z.bar.y - 20, meter.y + meter.h + Math.floor((z.bar.y - meter.y - meter.h) / 2));
+    expect(scene.mousepressed(x, y)).toBe(true);
+    expect(scene.area_menu_open).toBe(true);
+    scene.keypressed(" ");
+    expect(scene.area_menu_open).toBe(false);
+  });
+
+  it("chips walk the position and stay open; an outside tap closes", () => {
+    const state = createState();
+    state.highest_area = 2;
+    state.area_index = 2;
+    state.area_kills = 5;
+    const scene = sized_scene(state);
+    scene.area_menu_open = true;
+    const m = Layout.area_menu(Config.WINDOW_WIDTH, Config.WINDOW_HEIGHT, state.highest_area + 1);
+    expect(m.chips.length).toBe(3);
+    const c = m.chips[0];
+    expect(scene.mousepressed(c.x + 1, c.y + 1)).toBe(true);
+    expect(state.area_index).toBe(0);
+    expect(state.area_kills).toBe(0);
+    expect(scene.area_menu_open).toBe(true); // chip taps keep the menu open
+    expect(scene.mousepressed(2, 2)).toBe(true);
+    expect(scene.area_menu_open).toBe(false);
+  });
+
+  it("the detail overlay's equip button toggles the lane", () => {
+    const state = createState();
+    state.waifus = [{ name: "Karen the Accountant", bonus_type: "tokens", bonus_value: 0.1, rarity: "rare" }];
+    const scene = sized_scene(state);
+    scene.waifu_detail_index = 1;
+    scene.draw(stub_ctx(), state, Config.WINDOW_WIDTH, Config.WINDOW_HEIGHT);
+    const btn = scene._equip_btn();
+    const cx = btn.x + Math.floor(btn.w / 2);
+    const cy = btn.y + Math.floor(btn.h / 2);
+    expect(scene.mousepressed(cx, cy)).toBe(true);
+    expect(state.equipped).toEqual(["Karen the Accountant"]);
+    expect(scene.waifu_detail_index).toBe(1); // button keeps the overlay open
+    expect(scene.mousepressed(cx, cy)).toBe(true);
+    expect(state.equipped).toEqual([]);
+  });
+
+  it("duplicate hires merge into one card with an xN badge", () => {
+    const state = createState();
+    state.waifus = [
+      { name: "Dave from IT", bonus_type: "tokens", bonus_value: 0.12, rarity: "common" },
+      { name: "Dave from IT", bonus_type: "tokens", bonus_value: 0.15, rarity: "rare" },
+    ];
+    const scene = sized_scene(state);
+    const groups = scene._roster_groups();
+    expect(groups.length).toBe(1);
+    expect(groups[0].count).toBe(2);
+    expect(groups[0].waifu.bonus_value).toBeCloseTo(0.15, 5); // best copy represents
+    const ctx = stub_ctx();
+    scene.draw(ctx, state, Config.WINDOW_WIDTH, Config.WINDOW_HEIGHT);
+    const texts = (ctx as unknown as { calls: string[] }).calls
+      .filter((c) => c.startsWith("fillText:")).map((c) => c.slice("fillText:".length));
+    expect(texts).toContain("Waifus (1)");
+    expect(texts).toContain("x2");
+  });
+});
