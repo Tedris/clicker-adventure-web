@@ -217,3 +217,29 @@ describe("MainScene rail collapse tabs", () => {
     expect(state.gold).toEqual(gold_before);
   });
 });
+
+describe("Waifu detail text wrapping", () => {
+  it("every drawn row fits the detail panel's inner column", () => {
+    const state = createState();
+    state.waifus = [{
+      name: "Karen the Accountant", rarity: "rare", bonus_type: "gold", bonus_value: 0.15,
+    } as never];
+    const scene = make_scene(state);
+    scene.load(state);
+    scene.waifu_detail_index = 1;
+    const ctx = stub_ctx();
+    scene.draw(ctx, state, Config.WINDOW_WIDTH, Config.WINDOW_HEIGHT);
+    const d = Layout.waifu_detail(Config.WINDOW_WIDTH, Config.WINDOW_HEIGHT);
+    const calls = (ctx as unknown as { calls: string[] }).calls;
+    const texts = calls.filter((c) => c.startsWith("fillText:")).map((c) => c.slice("fillText:".length));
+    // Compare only the overlay's own rows (from the title onward).
+    const overlay = texts.slice(texts.indexOf("Karen the Accountant"));
+    expect(overlay.length >= 6).toBe(true); // rarity/bonus/skill + wrapped flavor
+    for (const t of overlay) {
+      // stub measureText = chars * 7: every row must fit the inner column
+      expect(t.length * 7 <= d.inner.w + 0.001).toBe(true);
+    }
+    // the wrapped flavor really was split into multiple rows
+    expect(overlay.some((t) => t.startsWith('"Keeps her feelings'))).toBe(true);
+  });
+});

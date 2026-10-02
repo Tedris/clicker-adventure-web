@@ -437,6 +437,43 @@ export class MainScene {
     return base + "..";
   }
 
+  // Measured greedy word wrap (mirrors Clicker._wrap_lines): every returned
+  // row fits max_w; an over-long single word gets its own row.
+  _wrap_text(ctx: CanvasRenderingContext2D, text: string, max_w: number): string[] {
+    ctx.font = `${Config.FONT_SIZE}px sans-serif`;
+    const words = text.split(" ");
+    const lines: string[] = [];
+    let cur = "";
+    for (const word of words) {
+      const cand = cur === "" ? word : cur + " " + word;
+      if (cur === "" || ctx.measureText(cand).width <= max_w) {
+        cur = cand;
+      } else {
+        lines.push(cur);
+        cur = word;
+      }
+    }
+    if (cur !== "") lines.push(cur);
+    return lines.length > 0 ? lines : [""];
+  }
+
+  // Centered wrapped paragraph inside a max_w column; returns the next row y.
+  private _text_lines(
+    ctx: CanvasRenderingContext2D,
+    text: string,
+    x: number,
+    y: number,
+    max_w: number,
+    color: readonly number[],
+  ): number {
+    const lh = Config.FONT_SIZE + 2;
+    const lines = this._wrap_text(ctx, text, max_w);
+    lines.forEach((line, i) => {
+      this._text(ctx, line, x, y + i * lh, color, { align: "center", box: max_w });
+    });
+    return y + lines.length * lh + 3;
+  }
+
   private _hud_rates(): [string, string, string] {
     const state = this.state;
     let idle_mult = 1;
@@ -914,21 +951,17 @@ export class MainScene {
 
     let y = d.info_top;
     if (rarity) {
-      this._text(ctx, `${rarity.stars} ${rarity.name}`, d.inner.x, y, rarity.color, { align: "center", box: d.inner.w });
-      y = y + 16;
+      y = this._text_lines(ctx, `${rarity.stars} ${rarity.name}`, d.inner.x, y, d.inner.w, rarity.color);
     }
     const bonus_label = Config.WAIFU_BONUS_LABELS[waifu.bonus_type as keyof typeof Config.WAIFU_BONUS_LABELS];
     if (bonus_label) {
-      this._text(ctx, `+${Math.round((waifu.bonus_value ?? 0) * 100)}% ${bonus_label}`, d.inner.x, y,
-        Config.POP_COLOR_WHITE, { align: "center", box: d.inner.w });
+      y = this._text_lines(ctx, `+${Math.round((waifu.bonus_value ?? 0) * 100)}% ${bonus_label}`,
+        d.inner.x, y, d.inner.w, Config.POP_COLOR_WHITE);
     }
-    y = y + 16;
-    this._text(ctx, "Cheat Skill: " + (personality?.skill ?? "Office Synergy"), d.inner.x, y,
-      Config.POP_COLOR_WHITE, { align: "center", box: d.inner.w });
-    y = y + 18;
+    y = this._text_lines(ctx, "Cheat Skill: " + (personality?.skill ?? "Office Synergy"),
+      d.inner.x, y, d.inner.w, Config.POP_COLOR_WHITE);
     if (personality?.flavor) {
-      this._text(ctx, `"${personality.flavor}"`, d.inner.x, y, Config.WAIFU_HUMOR_COLOR,
-        { align: "center", box: d.inner.w });
+      this._text_lines(ctx, `"${personality.flavor}"`, d.inner.x, y, d.inner.w, Config.WAIFU_HUMOR_COLOR);
     }
 
     // Phase 15 (INP-04): dismiss affordance on the panel bottom pad line.
