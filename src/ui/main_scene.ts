@@ -129,6 +129,9 @@ export class MainScene {
   area_menu_open = false;
   // Assigned-hire automatic damage accumulator (PS99 idle loop), seconds.
   auto_accum = 0;
+  // Respawn countdown per harvestable pickup spot (Coin pile / EXP orb).
+  // Runtime-only: the row re-ripens on its own timer, not on the chest.
+  pickup_cooldown: Record<"coins" | "exp", number> = { coins: 0, exp: 0 };
   // Last hover position, for wheel routing without an explicit cursor arg.
   _hover_x: number | null = null;
   _hover_y: number | null = null;
@@ -224,6 +227,12 @@ export class MainScene {
     for (const cur of ["gold", "exp", "token"] as const) {
       if (this.value_flash[cur] > 0) {
         this.value_flash[cur] = Math.max(0, this.value_flash[cur] - scaled_dt);
+      }
+    }
+    // Pickup respawn countdown: piles and orbs re-ripe on their own timer.
+    for (const key of ["coins", "exp"] as const) {
+      if (this.pickup_cooldown[key] > 0) {
+        this.pickup_cooldown[key] = Math.max(0, this.pickup_cooldown[key] - scaled_dt);
       }
     }
 
@@ -661,14 +670,26 @@ export class MainScene {
     this._text(ctx, p.index < highest ? ">" : "-", nav.next.x, nav.next.y + 5,
       Config.PITY_NORMAL_COLOR, { align: "center", box: nav.next.w });
 
-    // PS99-style pickup row under the readout: coin pile, EXP orb, treasure
-    // chest — bright when ripe (tap to harvest), faded while still locked;
-    // the chest lights with the milestone and pays itself on the advance.
-    // Hidden when the row would touch the bottom bar.
+    // PS99-style pickups around the stage edge: coin pile left, EXP orb
+    // under the readout, treasure chest right. Bright when ripe (tap to
+    // harvest), faded while locked or on respawn cooldown; the chest lights
+    // with the full gold meter. Hidden when a spot would touch the bar.
     const spots = Layout.pickup_spots(this._w, this._h, this._collapse());
-    if (spots.coins.y + spots.coins.h <= z.bar.y) {
-      this._draw_node_icons(ctx, spots, Areas.node_flags(p.gold, p.gold_target));
+    if (spots.exp.y + spots.exp.h <= z.bar.y) {
+      this._draw_node_icons(ctx, spots, this._pickup_flags(state));
     }
+  }
+
+  // Gold ripeness from Areas, dimmed while a picked-up spot is counting
+  // down its respawn. The chest ignores cooldowns - it gates on its own.
+  private _pickup_flags(state: GameState): NodeFlags {
+    const p = Areas.progress(state);
+    const ripe = Areas.node_flags(p.gold, p.gold_target);
+    return {
+      coins: ripe.coins && this.pickup_cooldown.coins <= 0,
+      exp: ripe.exp && this.pickup_cooldown.exp <= 0,
+      chest: ripe.chest,
+    };
   }
 
   // Coin pile (stacked circles), EXP orb (ringed circle) and treasure chest
@@ -1483,15 +1504,19 @@ export class MainScene {
       }
     }
     // Pickup row: a tap on a ripe Coin pile / EXP orb / Treasure Chest
-    // harvests it once. The Chest also unlocks the next area.
+    // Harvest spots: coins and orbs pay when ripe and off cooldown, then
+    // start their respawn countdown; the Chest also unlocks the next area.
     const spots = Layout.pickup_spots(this._w, this._h, this._collapse());
     const lanes = { coins: ["gold"], exp: ["exp"], chest: ["token"] } as const;
     for (const key of ["coins", "exp", "chest"] as const) {
       const s = spots[key];
       if (x >= s.x && x <= s.x + s.w && y >= s.y && y <= s.y + s.h) {
-        if (state) {
+        if (state && this._pickup_flags(state)[key]) {
           const msg = Areas.harvest(state, key);
-          if (msg) this.fire_event(msg, lanes[key]);
+          if (msg) {
+            this.fire_event(msg, lanes[key]);
+            if (key !== "chest") this.pickup_cooldown[key] = Config.PICKUP_RESPAWN_SECONDS;
+          }
         }
         return true;
       }

@@ -139,7 +139,7 @@ describe("Areas.travel", () => {
 });
 
 describe("Areas node hops", () => {
-  it("gold boundaries ripe the pickups; harvest pays each once", () => {
+  it("gold boundaries ripe the pickups; harvest pays while ripe", () => {
     const s = createState();
     const target = Config.AREA_GOLD_TARGETS[0];
     const [b1, b2] = Areas.node_bounds(target);
@@ -148,7 +148,9 @@ describe("Areas node hops", () => {
 
     s.area_gold = b1;
     expect(Areas.harvest(s, "coins")).toBeTruthy();
-    expect(null).toEqual(Areas.harvest(s, "coins"));
+    // Coins and orbs stay harvestable while their mark holds - the scene
+    // paces repeat taps with a respawn countdown, the logic does not.
+    expect(Areas.harvest(s, "coins")).toBeTruthy();
     s.area_gold = b2;
     expect(Areas.harvest(s, "exp")).toBeTruthy();
     expect(s.total_gold_earned >= Config.AREA_NODE_GOLD).toBe(true);
@@ -159,19 +161,18 @@ describe("Areas node hops", () => {
     expect(true).toEqual(Areas.next_ready(s));
     expect(Areas.harvest(s, "chest")).toBeTruthy();
     expect(s.total_tokens_earned >= Config.AREA_NODE_TOKENS).toBe(true);
-    // Chest harvest laps the area: gold, kills and flags all reset.
+    // Chest harvest laps the area: gold and kills reset.
     expect(0).toEqual(s.area_gold);
     expect(0).toEqual(s.area_kills);
-    expect({}).toEqual(s.area_nodes);
   });
 
-  it("a save loaded past several boundaries still harvests each node once", () => {
+  it("a save loaded past several boundaries harvests every ripe node", () => {
     const s = createState();
     s.area_gold = Math.ceil((Config.AREA_GOLD_TARGETS[0] * 2) / 3);
     const gold_before = s.gold;
     expect(Areas.harvest(s, "coins")).toBeTruthy();
     expect(s.gold).toBe(gold_before + Config.AREA_NODE_GOLD);
-    expect(Areas.harvest(s, "coins")).toBeNull();
+    expect(Areas.harvest(s, "coins")).toBeTruthy();
   });
 });
 
@@ -218,16 +219,17 @@ describe("Areas.monster_hp", () => {
 });
 
 describe("Areas.harvest", () => {
-  it("a ripe Coin pile pays once and a second tap is inert", () => {
+  it("a ripe Coin pile keeps paying while its mark holds", () => {
     const s = createState();
-    s.area_gold = Math.ceil(Config.AREA_GOLD_TARGETS[0] / 3);
+    const mark = Math.ceil(Config.AREA_GOLD_TARGETS[0] / 3);
+    s.area_gold = mark;
     const gold_before = s.gold;
-    const msg = Areas.harvest(s, "coins");
-    expect(msg).toBeTruthy();
+    expect(Areas.harvest(s, "coins")).toBeTruthy();
     expect(s.gold).toBe(gold_before + Config.AREA_NODE_GOLD);
     // The pile burst also feeds the area's own meter.
-    expect(s.area_gold).toBe(Math.ceil(Config.AREA_GOLD_TARGETS[0] / 3) + Config.AREA_NODE_GOLD);
-    expect(null).toEqual(Areas.harvest(s, "coins"));
+    expect(s.area_gold).toBe(mark + Config.AREA_NODE_GOLD);
+    expect(Areas.harvest(s, "coins")).toBeTruthy();
+    expect(s.gold).toBe(gold_before + 2 * Config.AREA_NODE_GOLD);
   });
 
   it("a pending node never pays", () => {
@@ -237,13 +239,13 @@ describe("Areas.harvest", () => {
     expect(0).toEqual(s.exp);
   });
 
-  it("travel resets the harvest flags for the new area", () => {
+  it("travel resets the in-area gold for the new area", () => {
     const s = createState();
     s.area_gold = Math.ceil(Config.AREA_GOLD_TARGETS[0] / 3);
     Areas.harvest(s, "coins");
     s.highest_area = 1;
     Areas.travel(s, 1);
-    expect({}).toEqual(s.area_nodes);
+    expect(0).toEqual(s.area_gold);
     // Fresh area, fresh Coin pile: ripe right away at its own boundary.
     s.area_gold = Math.ceil(Config.AREA_GOLD_TARGETS[1] / 3);
     expect(Areas.harvest(s, "coins")).toBeTruthy();

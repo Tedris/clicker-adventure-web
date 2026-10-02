@@ -566,3 +566,24 @@ describe("Phase 15 phone-aspect sweep", () => {
     expect(Layout.bar_items(ww, wh).stats.w >= 34).toBe(true); // pitfall-7 stats floor
   });
 });
+
+describe("Layout.pickup_spots", () => {
+  it("spreads the pickups around the stage instead of one row", () => {
+    const ww = Config.WINDOW_WIDTH;
+    const wh = Config.WINDOW_HEIGHT;
+    const z = Layout.zones(ww, wh);
+    const p = Layout.pickup_spots(ww, wh);
+    const stage_cx = z.stage.x + z.stage.w / 2;
+    expect(p.coins.x < stage_cx).toBe(true); // pile hugs the left edge
+    expect(p.chest.x > stage_cx).toBe(true); // chest hugs the right edge
+    // The orb stays under the meter, centered on the stage.
+    const meter = Layout.meter_rect(ww, wh);
+    expect(Math.abs(p.exp.x + p.exp.w / 2 - (meter.x + meter.w / 2)) <= 1).toBe(true);
+    expect(p.exp.y > meter.y + meter.h).toBe(true);
+    // Spots sit inside the stage and clear the bottom bar.
+    for (const r of [p.coins, p.exp, p.chest]) {
+      expect(r.x >= z.stage.x && r.x + r.w <= z.stage.x + z.stage.w).toBe(true);
+      expect(r.y + r.h <= z.bar.y).toBe(true);
+    }
+  });
+});

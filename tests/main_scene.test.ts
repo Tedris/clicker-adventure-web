@@ -344,7 +344,7 @@ describe("Area menu modal and equip lanes", () => {
     expect(state.area_kills).toBe(kills_before + 1); // one ally, one kill/sec
   });
 
-  it("tapping a ripe Coin pile spot harvests it once", () => {
+  it("tapping a ripe Coin pile pays, then the spot respawns on its timer", () => {
     const state = createState();
     state.area_gold = Math.ceil(Config.AREA_GOLD_TARGETS[0] / 3); // coins ripe
     const scene = sized_scene(state);
@@ -354,8 +354,12 @@ describe("Area menu modal and equip lanes", () => {
     expect(scene.mousepressed(cx, cy)).toBe(true);
     expect(state.gold >= Config.AREA_NODE_GOLD).toBe(true);
     const gold = state.gold;
-    expect(scene.mousepressed(cx, cy)).toBe(true); // already harvested
+    expect(scene.mousepressed(cx, cy)).toBe(true); // cooling down: no pay
     expect(state.gold).toBe(gold);
+    // The spot re-ripens on its own timer - no chest needed.
+    scene.update(Config.PICKUP_RESPAWN_SECONDS + 0.01);
+    expect(scene.mousepressed(cx, cy)).toBe(true);
+    expect(state.gold > gold).toBe(true);
   });
 
   it("tapping the ripe Treasure Chest unlocks the next area", () => {

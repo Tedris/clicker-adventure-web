@@ -364,21 +364,25 @@ export function area_menu(ww: number, wh: number, count: number) {
   };
 }
 
-// Pickup spots (PS99 harvest row): three tappable rects centered under the
-// kill meter, sharing geometry with the drawn coin/orb/chest glyphs so a
-// pixel that lights up is exactly a pixel that harvests. Hidden-row logic
-// (overlap with the bottom bar) stays in the draw path.
+// Pickup spots (PS99 harvest layout): Coin pile hugs the left edge of the
+// stage, EXP orb sits centered under the kill meter, treasure chest hugs the
+// right edge - the pickups surround the monster instead of crowding one row.
+// Same rects feed draw and hit-test, so lit pixels are tappable pixels.
 export function pickup_spots(ww: number, wh: number, collapsed?: CollapseOpts) {
   const z = zones(ww, wh, collapsed);
   const meter = meter_rect(ww, wh, collapsed);
-  const pitch = 26;
-  const cx = Math.floor(z.stage.x + z.stage.w / 2);
-  const y = meter.y + meter.h + 4 + Config.FONT_SIZE + 3;
-  const box = (center_x: number): Rect => ({ x: center_x - 9, y, w: 18, h: 14 });
+  const stage = z.stage;
+  const mid_y = Math.floor(stage.y + stage.h / 2) - 7;
+  const side_w = 22;
   return {
-    coins: box(cx - pitch),
-    exp: box(cx),
-    chest: box(cx + pitch),
+    coins: { x: stage.x + 12, y: mid_y, w: side_w, h: 16 },
+    exp: {
+      x: Math.floor(stage.x + stage.w / 2) - 9,
+      y: meter.y + meter.h + 4 + Config.FONT_SIZE + 3,
+      w: 18,
+      h: 14,
+    },
+    chest: { x: stage.x + stage.w - side_w - 12, y: mid_y, w: side_w, h: 16 },
   };
 }
 

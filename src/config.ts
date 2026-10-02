@@ -195,13 +195,15 @@ export const Config = {
   // Assigned hires land this much automatic damage per second on the monster
   // (each ally contributes one click-damage worth per tick).
   AUTO_KILL_TICK: 1.0,
-  // PS99-style node hops inside an area: the kill target splits into a Coin
-  // pile, an EXP orb and a Treasure Chest (in that harvest order), each
-  // paid once when its boundary kill lands. The milestone boss is the last
-  // boundary. Bursts are flat so early areas feel chunky without scaling.
+  // PS99-style pickups inside an area: Coin pile and EXP orb ripe at the
+  // 1/3 and 2/3 gold marks, Treasure Chest with the full meter. Coins and
+  // orbs re-ripe after a short cooldown so the row keeps its rhythm; the
+  // chest waits for the full meter. Bursts are flat so early areas feel
+  // chunky without scaling.
   AREA_NODE_GOLD: 10,
   AREA_NODE_EXP: 10,
   AREA_NODE_TOKENS: 5,
+  PICKUP_RESPAWN_SECONDS: 10,
   // Waifu equip lanes (Pet-Simulator-style): only equipped hires pay their
   // bonus, so picking the trio is a real decision. Oldest-first eviction.
   EQUIP_SLOTS: 3,

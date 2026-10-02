@@ -97,17 +97,17 @@ export class Areas {
     return null;
   }
 
-  // Tap a ripe pickup for its one-time burst. The Chest additionally unlocks
-  // the next area (highest_area lift) and laps the current one — moving on
-  // itself stays the player's call via chevrons or the Areas menu. Returns
-  // the toast line, or null when the node is not ripe yet or was harvested.
+  // Tap a ripe pickup for its burst. Coins and orbs stay ripe while their
+  // gold mark is met (the scene paces them with a respawn cooldown); the
+  // Chest additionally unlocks the next area (highest_area lift) and laps
+  // the current area counters — moving on itself stays the player's call
+  // via chevrons or the Areas menu. Returns the toast line, or null when
+  // the node is not ripe yet.
   static harvest(state: GameState, node: "coins" | "exp" | "chest"): string | null {
     const idx = Math.max(0, Math.min(state.area_index ?? 0, Config.AREAS.length - 1));
     const target = Config.AREA_GOLD_TARGETS[idx];
     const flags = Areas.node_flags(state.area_gold ?? 0, target);
-    const done = state.area_nodes ?? {};
-    if (!flags[node] || done[node]) return null;
-    state.area_nodes = { ...done, [node]: true };
+    if (!flags[node]) return null;
     if (node === "coins") {
       Areas._credit(state, Config.AREA_NODE_GOLD, 0, 0);
       return `Coin pile! +${Config.AREA_NODE_GOLD} gold`;
@@ -122,15 +122,7 @@ export class Areas {
     }
     state.area_gold = 0;
     state.area_kills = 0;
-    state.area_gold = 0;
-    Areas._reset_nodes(state);
     return `Treasure Chest! +${Config.AREA_NODE_TOKENS} tokens`;
-  }
-
-  // Pickup nodes belong to the area they grew in: every move resets the
-  // harvest flags so the fresh area starts with its own Coin/EXP pickups.
-  private static _reset_nodes(state: GameState): void {
-    state.area_nodes = {};
   }
 
   // Full-meter check: the area's gold target is met and its Treasure Chest
@@ -163,7 +155,6 @@ export class Areas {
     state.area_index = to;
     state.area_kills = 0;
     state.area_gold = 0;
-    Areas._reset_nodes(state);
     return Config.AREAS[to].name;
   }
 
@@ -181,7 +172,6 @@ export class Areas {
     state.area_index = to;
     state.area_kills = 0;
     state.area_gold = 0;
-    Areas._reset_nodes(state);
     return Config.AREAS[to].name;
   }
 
