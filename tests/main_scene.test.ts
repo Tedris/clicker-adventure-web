@@ -264,18 +264,16 @@ describe("Area menu modal and equip lanes", () => {
     return scene;
   }
 
-  it("a dead click on the meter strip opens the area menu; a key closes it", () => {
+  it("empty stage space falls through instead of opening the menu", () => {
     const state = createState();
     const scene = sized_scene(state);
     const z = Layout.zones(Config.WINDOW_WIDTH, Config.WINDOW_HEIGHT);
     const meter = Layout.meter_rect(Config.WINDOW_WIDTH, Config.WINDOW_HEIGHT);
-    // Mid-strip between the chevrons, below the monster hitbox: a lane no
-    // other handler claims.
+    // Mid-strip between the chevrons, below the monster hitbox: a dead click
+    // now falls through — the Areas button is the one menu entry point.
     const x = z.stage.x + Math.floor(z.stage.w / 2);
-    const y = meter.y + meter.h + 20;
-    expect(scene.mousepressed(x, y)).toBe(true);
-    expect(scene.area_menu_open).toBe(true);
-    scene.keypressed(" ");
+    const y = Math.min(z.bar.y - 6, meter.y + meter.h + 40);
+    expect(scene.mousepressed(x, y)).toBe(false);
     expect(scene.area_menu_open).toBe(false);
   });
 
@@ -333,6 +331,20 @@ describe("Area menu modal and equip lanes", () => {
     const kills_before = state.area_kills;
     scene.update(Config.AUTO_KILL_TICK + 0.01);
     expect(state.area_kills).toBe(kills_before + 1); // one ally, one kill/sec
+  });
+
+  it("tapping a ripe Coin pile spot harvests it once", () => {
+    const state = createState();
+    state.area_kills = Math.ceil(Config.AREA_KILL_TARGETS[0] / 3); // coins ripe
+    const scene = sized_scene(state);
+    const s = Layout.pickup_spots(Config.WINDOW_WIDTH, Config.WINDOW_HEIGHT).coins;
+    const cx = s.x + Math.floor(s.w / 2);
+    const cy = s.y + Math.floor(s.h / 2);
+    expect(scene.mousepressed(cx, cy)).toBe(true);
+    expect(state.gold >= Config.AREA_NODE_GOLD).toBe(true);
+    const gold = state.gold;
+    expect(scene.mousepressed(cx, cy)).toBe(true); // already harvested
+    expect(state.gold).toBe(gold);
   });
 
   it("duplicate hires merge into one card with an xN badge", () => {

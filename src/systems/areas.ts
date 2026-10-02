@@ -80,21 +80,23 @@ export class Areas {
     }
   }
 
-  // One kill in. Kills count up to the area target and then STOP — the
-  // filled meter means the milestone boss has spawned. Every click after
-  // that is a boss hit: it pays the Treasure Chest once, advances the area
-  // (or laps the final one), resets the counter and returns the toast.
-  // The milestone also lifts highest_area, the furthest unlocked area that
-  // travel walks back into; cleared-area bonuses read highest_area, never
-  // the walked-back row.
+  // One kill in. Kills count up to the area target; boundary kills only RIPE
+  // the Coin pile / EXP orb pickups (tapped for their bursts via harvest),
+  // and the milestone kill pays the Treasure Chest, advances the area (or
+  // laps the final one) and resets the counter. The milestone also lifts
+  // highest_area, the furthest unlocked area that travel walks back into;
+  // cleared-area bonuses read highest_area, never the walked-back row.
+  // Returns the toast line on an advance, null on a plain kill.
   static on_kill(state: GameState): string | null {
     const idx = Math.max(0, Math.min(state.area_index ?? 0, Config.AREAS.length - 1));
     const needed = Config.AREA_KILL_TARGETS[idx];
     const prev = Math.max(0, state.area_kills ?? 0);
+    const k = Math.min(prev + 1, needed);
+    state.area_kills = k;
 
-    // Boss phase: the meter is full, this click is the boss hit.
-    if (prev >= needed) {
+    if (prev < needed && k >= needed) {
       Areas._credit(state, 0, 0, Config.AREA_NODE_TOKENS);
+      Areas._reset_nodes(state);
       state.area_kills = 0;
       if (idx < Config.AREAS.length - 1) {
         state.area_index = idx + 1;
@@ -103,13 +105,29 @@ export class Areas {
       }
       return "Final boss down! The grind goes on.";
     }
-
-    const k = prev + 1;
-    state.area_kills = k;
-    const [b1, b2] = Areas.node_bounds(needed);
-    if (prev < b1 && k >= b1) Areas._credit(state, Config.AREA_NODE_GOLD, 0, 0);
-    else if (prev < b2 && k >= b2) Areas._credit(state, 0, Config.AREA_NODE_EXP, 0);
     return null;
+  }
+
+  // Tap a ripe pickup for its one-time burst. Returns the toast line, or
+  // null when the node is not ripe yet or was already harvested.
+  static harvest(state: GameState, node: "coins" | "exp"): string | null {
+    const idx = Math.max(0, Math.min(state.area_index ?? 0, Config.AREAS.length - 1));
+    const needed = Config.AREA_KILL_TARGETS[idx];
+    const flags = Areas.node_flags(state.area_kills ?? 0, needed);
+    const done = state.area_nodes ?? {};
+    if (!flags[node] || done[node]) return null;
+    if (node === "coins") Areas._credit(state, Config.AREA_NODE_GOLD, 0, 0);
+    else Areas._credit(state, 0, Config.AREA_NODE_EXP, 0);
+    state.area_nodes = { ...done, [node]: true };
+    return node === "coins"
+      ? `Coin pile! +${Config.AREA_NODE_GOLD} gold`
+      : `EXP orb! +${Config.AREA_NODE_EXP} exp`;
+  }
+
+  // Pickup nodes belong to the area they grew in: every move resets the
+  // harvest flags so the fresh area starts with its own Coin/EXP pickups.
+  private static _reset_nodes(state: GameState): void {
+    state.area_nodes = {};
   }
 
   // Meter-full check for the boss aura/hint: the quota is met and the boss
@@ -141,6 +159,7 @@ export class Areas {
     if (to === from) return null;
     state.area_index = to;
     state.area_kills = 0;
+    Areas._reset_nodes(state);
     return Config.AREAS[to].name;
   }
 
@@ -157,6 +176,7 @@ export class Areas {
     if (to === from) return null;
     state.area_index = to;
     state.area_kills = 0;
+    Areas._reset_nodes(state);
     return Config.AREAS[to].name;
   }
 

@@ -47,6 +47,8 @@ export interface GameState {
   // CURRENT area's lane pays bonuses and lands automatic kills. An empty lane
   // means "auto": the top bonus_value instances are active.
   assignments?: Record<number, string[]>;
+  // Harvested PS99-style node pickups in the CURRENT area (reset on travel).
+  area_nodes?: { coins?: true; exp?: true };
   // Session-only artifacts (never persisted).
   offline_report: Record<string, number | string> | null;
   login_report: Record<string, number | string> | null;
@@ -87,6 +89,7 @@ export function createState(nowSeconds?: number): GameState {
     area_kills: 0,
     highest_area: 0,
     assignments: {},
+    area_nodes: {},
     offline_report: null,
     login_report: null,
     save_warning: null,

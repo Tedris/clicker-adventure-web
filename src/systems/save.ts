@@ -69,6 +69,8 @@ export class Save {
     area_kills: "number",
     highest_area: "number",
     assignments: "assignments_map",
+    // Harvested pickup flags for the live area; rides the true-set idiom.
+    area_nodes: "string_to_true",
   };
 
   // Versioned save migrations: each entry upgrades a raw decoded chunk IN
@@ -264,6 +266,7 @@ export class Save {
       String(state.passive_unlocked), state.waifus ? state.waifus.length : 0,
       state.area_index ?? 0, state.area_kills ?? 0, state.highest_area ?? 0,
       Object.entries(state.assignments ?? {}).map(([k, v]) => k + ":" + v.join(".")).join(";"),
+      Object.keys(state.area_nodes ?? {}).join(","),
     ];
     parts.push(Object.keys(state.exp_thresholds_unlocked ?? {}).length);
     const levels: Record<string, number> = upgrades ? upgrades.get_state() : state.upgrades ?? {};

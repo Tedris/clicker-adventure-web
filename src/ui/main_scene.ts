@@ -419,7 +419,6 @@ export class MainScene {
     // idle bob, squash-on-click and respawn fade all live there).
     this.clicker?.draw(ctx, this._zones().stage);
     this._draw_assigned_helpers(ctx, state);
-    this._draw_boss_aura(ctx, state);
 
     this._draw_kill_meter(ctx, state);
     this._draw_area_line(ctx, state);
@@ -656,64 +655,44 @@ export class MainScene {
     this._text(ctx, p.index < highest ? ">" : "-", nav.next.x, nav.next.y + 5,
       Config.PITY_NORMAL_COLOR, { align: "center", box: nav.next.w });
 
-    // PS99-style pickup icons under the readout: coin pile, EXP orb, treasure
-    // chest — bright once harvested, dim while pending, clicked left to right.
-    const icons_y = row_y + Config.FONT_SIZE + 3;
-    if (icons_y + 10 <= z.bar.y) {
-      this._draw_node_icons(ctx, z.stage, icons_y, Areas.node_flags(p.kills, p.needed));
+    // PS99-style pickup row under the readout: coin pile, EXP orb, treasure
+    // chest — bright when ripe (tap to harvest), faded while still locked;
+    // the chest lights with the milestone and pays itself on the advance.
+    // Hidden when the row would touch the bottom bar.
+    const spots = Layout.pickup_spots(this._w, this._h, this._collapse());
+    if (spots.coins.y + spots.coins.h <= z.bar.y) {
+      this._draw_node_icons(ctx, spots, Areas.node_flags(p.kills, p.needed));
     }
   }
 
-  // Three tiny shape glyphs (coin circle / EXP diamond / chest rect) centered
-  // as one row: bright = harvested, faded = still waiting.
+  // Coin pile (stacked circles), EXP orb (ringed circle) and treasure chest
+  // (lid + box) drawn centered on their Layout.pickup_spots rects — same
+  // geometry the click router hit-tests, so lit pixels are tappable pixels.
   private _draw_node_icons(
     ctx: CanvasRenderingContext2D,
-    stage: { x: number; y: number; w: number; h: number },
-    y: number,
+    spots: ReturnType<typeof Layout.pickup_spots>,
     flags: NodeFlags,
   ): void {
-    const items: Array<[boolean, readonly number[]]> = [
-      [flags.coins, Config.POP_COLOR_GOLD],
-      [flags.exp, Config.POP_COLOR_EXP],
-      [flags.chest, Config.POP_COLOR_TOKEN],
-    ];
-    const pitch = 26;
-    const cx = Math.floor(stage.x + stage.w / 2);
-    for (let i = 0; i < items.length; i++) {
-      ctx.fillStyle = rgba(items[i][1], items[i][0] ? 0.95 : 0.35);
-      const x = cx + (i - 1) * pitch;
-      if (i === 0) {
-        ctx.beginPath();
-        ctx.arc(x, y + 5, 5, 0, Math.PI * 2);
-        ctx.fill();
-      } else if (i === 1) {
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-        ctx.lineTo(x + 5, y + 5);
-        ctx.lineTo(x, y + 10);
-        ctx.lineTo(x - 5, y + 5);
-        ctx.closePath();
-        ctx.fill();
+    const keys = ["coins", "exp", "chest"] as const;
+    const colors = [Config.POP_COLOR_GOLD, Config.POP_COLOR_EXP, Config.POP_COLOR_TOKEN];
+    for (let i = 0; i < keys.length; i++) {
+      const r = spots[keys[i]];
+      const cx = Math.floor(r.x + r.w / 2);
+      const cy = Math.floor(r.y + r.h / 2);
+      ctx.fillStyle = rgba(colors[i], flags[keys[i]] ? 0.95 : 0.35);
+      if (keys[i] === "coins") {
+        ctx.beginPath(); ctx.arc(cx - 4, cy + 2, 3, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(cx + 4, cy + 2, 3, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(cx, cy - 2, 3, 0, Math.PI * 2); ctx.fill();
+      } else if (keys[i] === "exp") {
+        ctx.beginPath(); ctx.arc(cx, cy, 5, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = rgba(colors[i], flags[keys[i]] ? 0.95 : 0.35);
+        ctx.beginPath(); ctx.arc(cx, cy, 7, 0, Math.PI * 2); ctx.stroke();
       } else {
-        ctx.fillRect(x - 6, y + 2, 12, 8);
-        ctx.fillRect(x - 6, y, 12, 2);
+        ctx.fillRect(cx - 6, cy - 3, 12, 7);
+        ctx.fillRect(cx - 6, cy - 6, 12, 2);
       }
     }
-  }
-
-  // Gold ring around the monster once the kill quota is met: this is the
-  // boss, and the next click on it advances the area.
-  private _draw_boss_aura(ctx: CanvasRenderingContext2D, state: GameState): void {
-    if (!this.clicker || !Areas.boss_ready(state)) return;
-    const stage = this._zones().stage;
-    const cx = stage.x + stage.w / 2 + this.clicker.pos_x;
-    const cy = stage.y + stage.h / 2 + this.clicker.pos_y + this.clicker.idle_offset;
-    ctx.strokeStyle = rgba(Config.POP_COLOR_GOLD, 0.9);
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(cx, cy, Config.MONSTER_SIZE / 2 + 6, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.lineWidth = 1;
   }
 
   // The assigned crew, drawn as tiny sprites orbiting the monster so the
@@ -744,17 +723,6 @@ export class MainScene {
         ctx.fillRect(x, y, size, size);
       }
     }
-  }
-
-  // Band holding the two text rows under the kill meter: chevrons walk, and
-  // a dead click BETWEEN them opens the area menu. Tight to the drawn rows
-  // so empty stage space below keeps its normal fall-through behavior.
-  private _area_bar_rect(): Rect {
-    const z = this._zones();
-    const meter = Layout.meter_rect(this._w, this._h, this._collapse());
-    const y = meter.y + meter.h;
-    const bottom = Math.min(z.bar.y, y + 4 + Config.FONT_SIZE * 2 + 3 + 10 + 4);
-    return { x: z.stage.x, y, w: z.stage.w, h: Math.max(0, bottom - y) };
   }
 
   // Area menu modal: chips pick any unlocked area (instant travel), info
@@ -1509,15 +1477,20 @@ export class MainScene {
         return true;
       }
     }
-    // Gameplay first: monster, rails, bars keep priority on the strip. Only
-    // a dead click on the meter strip falls through to opening the menu.
-    if (this._click_at(x, y)) return true;
-    const area_band = this._area_bar_rect();
-    if (x >= area_band.x && x <= area_band.x + area_band.w
-      && y >= area_band.y && y < area_band.y + area_band.h) {
-      this.area_menu_open = !this.area_menu_open;
-      return true;
+    // Pickup row: a tap on a ripe Coin pile / EXP orb harvests its burst
+    // once (the Chest pays itself with the milestone advance).
+    const spots = Layout.pickup_spots(this._w, this._h, this._collapse());
+    for (const key of ["coins", "exp"] as const) {
+      const s = spots[key];
+      if (x >= s.x && x <= s.x + s.w && y >= s.y && y <= s.y + s.h) {
+        if (state) {
+          const msg = Areas.harvest(state, key);
+          if (msg) this.fire_event(msg, key === "coins" ? ["gold"] : ["exp"]);
+        }
+        return true;
+      }
     }
+    if (this._click_at(x, y)) return true;
     return false;
   }
 

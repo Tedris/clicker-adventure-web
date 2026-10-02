@@ -364,6 +364,24 @@ export function area_menu(ww: number, wh: number, count: number) {
   };
 }
 
+// Pickup spots (PS99 harvest row): three tappable rects centered under the
+// kill meter, sharing geometry with the drawn coin/orb/chest glyphs so a
+// pixel that lights up is exactly a pixel that harvests. Hidden-row logic
+// (overlap with the bottom bar) stays in the draw path.
+export function pickup_spots(ww: number, wh: number, collapsed?: CollapseOpts) {
+  const z = zones(ww, wh, collapsed);
+  const meter = meter_rect(ww, wh, collapsed);
+  const pitch = 26;
+  const cx = Math.floor(z.stage.x + z.stage.w / 2);
+  const y = meter.y + meter.h + 4 + Config.FONT_SIZE + 3;
+  const box = (center_x: number): Rect => ({ x: center_x - 9, y, w: 18, h: 14 });
+  return {
+    coins: box(cx - pitch),
+    exp: box(cx),
+    chest: box(cx + pitch),
+  };
+}
+
 const Layout = {
   rail_width,
   rail_tab,
@@ -374,6 +392,7 @@ const Layout = {
   stats_panel,
   stats_rect,
   meter_rect,
+  pickup_spots,
   fit_rail,
   roster_grid,
   roster_slot,

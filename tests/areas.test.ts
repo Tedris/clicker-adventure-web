@@ -59,14 +59,10 @@ describe("Areas.on_kill", () => {
     expect(0).toEqual(s.area_index);
   });
 
-  it("the milestone kill fills the meter; the boss click advances", () => {
+  it("the milestone kill beats the boss and advances immediately", () => {
     const s = createState();
     s.area_kills = Config.AREA_KILL_TARGETS[0] - 1;
-    expect(null).toEqual(Areas.on_kill(s));
-    expect(0).toEqual(s.area_index); // meter full but still in area 1
-    expect(Config.AREA_KILL_TARGETS[0]).toEqual(s.area_kills);
-    expect(true).toEqual(Areas.boss_ready(s));
-    const msg = Areas.on_kill(s); // next hit is the boss
+    const msg = Areas.on_kill(s);
     expect(1).toEqual(s.area_index);
     expect(0).toEqual(s.area_kills);
     expect(msg).toBeTruthy();
@@ -77,9 +73,10 @@ describe("Areas.on_kill", () => {
     const s = createState();
     const last = Config.AREAS.length - 1;
     s.area_index = last;
-    s.area_kills = Config.AREA_KILL_TARGETS[last];
-    Areas.on_kill(s);
+    s.area_kills = Config.AREA_KILL_TARGETS[last] - 1;
+    Areas.on_kill(s); // milestone laps the final area
     expect(last).toEqual(s.area_index);
+    expect(0).toEqual(s.area_kills);
   });
 });
 
@@ -131,29 +128,35 @@ describe("Areas.travel", () => {
 });
 
 describe("Areas node hops", () => {
-  it("coin/exp/treasure pay once each at their boundary kills", () => {
+  it("boundary kills only ripe the pickups; harvest pays each once", () => {
     const s = createState();
     const needed = Config.AREA_KILL_TARGETS[0];
     const [b1, b2] = Areas.node_bounds(needed);
-    let guard = 0;
-    for (let i = 0; i < needed + 1; i++) Areas.on_kill(s); // quota + boss hit
-    // Gold burst landed at b1 and never again; exp at b2; chest at needed.
-    expect(s.total_gold_earned >= Config.AREA_NODE_GOLD).toBe(true);
-    expect(s.total_exp_earned >= Config.AREA_NODE_EXP).toBe(true);
-    expect(s.total_tokens_earned >= Config.AREA_NODE_TOKENS).toBe(true);
     // Boundary arithmetic: thirds round up and stay below the milestone.
     expect(b1 < b2 && b2 <= needed).toBe(true);
-    expect(guard).toBe(0);
+
+    for (let i = 0; i < b1; i++) Areas.on_kill(s);
+    expect(Areas.harvest(s, "coins")).toBeTruthy();
+    expect(null).toEqual(Areas.harvest(s, "coins"));
+    for (let i = b1; i < b2; i++) Areas.on_kill(s);
+    expect(Areas.harvest(s, "exp")).toBeTruthy();
+    expect(s.total_gold_earned >= Config.AREA_NODE_GOLD).toBe(true);
+    expect(s.total_exp_earned >= Config.AREA_NODE_EXP).toBe(true);
+
+    // The chest rides the milestone advance itself.
+    for (let i = b2; i < needed; i++) Areas.on_kill(s);
+    expect(1).toEqual(s.area_index);
+    expect(s.total_tokens_earned >= Config.AREA_NODE_TOKENS).toBe(true);
   });
 
-  it("a save loaded past several boundaries credits each node once", () => {
+  it("a save loaded past several boundaries still harvests each node once", () => {
     const s = createState();
     const needed = Config.AREA_KILL_TARGETS[0];
-    s.area_kills = Math.ceil(needed / 3); // already at the coin boundary
-    Areas.on_kill(s);
-    const gold_after = s.gold;
-    Areas.on_kill(s); // between boundaries: no further burst
-    expect(s.gold).toBe(gold_after);
+    s.area_kills = Math.ceil((needed * 2) / 3); // already past both boundaries
+    const gold_before = s.gold;
+    expect(Areas.harvest(s, "coins")).toBeTruthy();
+    expect(s.gold).toBe(gold_before + Config.AREA_NODE_GOLD);
+    expect(Areas.harvest(s, "coins")).toBeNull();
   });
 });
 
@@ -196,5 +199,40 @@ describe("Areas.monster_hp", () => {
     expect(Areas.monster_hp({ area_index: 99, area_kills: 0 })).toEqual(
       Config.AREA_MONSTER_HP[Config.AREA_MONSTER_HP.length - 1],
     );
+  });
+});
+
+describe("Areas.harvest", () => {
+  it("a ripe Coin pile pays once and a second tap is inert", () => {
+    const s = createState();
+    const needed = Config.AREA_KILL_TARGETS[0];
+    for (let i = 0; i < Math.ceil(needed / 3); i++) Areas.on_kill(s);
+    const gold_before = s.gold;
+    const msg = Areas.harvest(s, "coins");
+    expect(msg).toBeTruthy();
+    expect(s.gold).toBe(gold_before + Config.AREA_NODE_GOLD);
+    expect(s.total_gold_earned >= Config.AREA_NODE_GOLD).toBe(true);
+    expect(null).toEqual(Areas.harvest(s, "coins"));
+  });
+
+  it("a pending node never pays and unknown nodes never crash", () => {
+    const s = createState();
+    expect(null).toEqual(Areas.harvest(s, "exp"));
+    expect(null).toEqual(Areas.harvest(s, "coins"));
+    expect(0).toEqual(s.exp);
+  });
+
+  it("travel resets the harvest flags for the new area", () => {
+    const s = createState();
+    const needed = Config.AREA_KILL_TARGETS[0];
+    for (let i = 0; i < Math.ceil(needed / 3); i++) Areas.on_kill(s);
+    Areas.harvest(s, "coins");
+    s.highest_area = 1;
+    Areas.travel(s, 1);
+    expect({}).toEqual(s.area_nodes);
+    // Fresh area, fresh Coin pile: ripe right away at its own boundary.
+    const n2 = Config.AREA_KILL_TARGETS[1];
+    for (let i = 0; i < Math.ceil(n2 / 3); i++) Areas.on_kill(s);
+    expect(Areas.harvest(s, "coins")).toBeTruthy();
   });
 });
