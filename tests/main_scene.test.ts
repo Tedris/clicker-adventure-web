@@ -272,7 +272,7 @@ describe("Area menu modal and equip lanes", () => {
     // Mid-strip between the chevrons, below the monster hitbox: a lane no
     // other handler claims.
     const x = z.stage.x + Math.floor(z.stage.w / 2);
-    const y = Math.min(z.bar.y - 20, meter.y + meter.h + Math.floor((z.bar.y - meter.y - meter.h) / 2));
+    const y = meter.y + meter.h + 20;
     expect(scene.mousepressed(x, y)).toBe(true);
     expect(scene.area_menu_open).toBe(true);
     scene.keypressed(" ");

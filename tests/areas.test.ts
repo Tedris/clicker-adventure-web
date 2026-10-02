@@ -59,10 +59,14 @@ describe("Areas.on_kill", () => {
     expect(0).toEqual(s.area_index);
   });
 
-  it("the milestone kill advances the area and resets in-area kills", () => {
+  it("the milestone kill fills the meter; the boss click advances", () => {
     const s = createState();
     s.area_kills = Config.AREA_KILL_TARGETS[0] - 1;
-    const msg = Areas.on_kill(s);
+    expect(null).toEqual(Areas.on_kill(s));
+    expect(0).toEqual(s.area_index); // meter full but still in area 1
+    expect(Config.AREA_KILL_TARGETS[0]).toEqual(s.area_kills);
+    expect(true).toEqual(Areas.boss_ready(s));
+    const msg = Areas.on_kill(s); // next hit is the boss
     expect(1).toEqual(s.area_index);
     expect(0).toEqual(s.area_kills);
     expect(msg).toBeTruthy();
@@ -117,6 +121,7 @@ describe("Areas.travel", () => {
     const s = createState();
     s.area_kills = Config.AREA_KILL_TARGETS[0] - 1;
     Areas.on_kill(s);
+    Areas.on_kill(s); // boss click lifts the frontier
     expect(1).toEqual(s.highest_area);
     Areas.travel(s, -1);
     expect(0).toEqual(s.area_index);
@@ -131,7 +136,7 @@ describe("Areas node hops", () => {
     const needed = Config.AREA_KILL_TARGETS[0];
     const [b1, b2] = Areas.node_bounds(needed);
     let guard = 0;
-    for (let i = 0; i < needed; i++) Areas.on_kill(s);
+    for (let i = 0; i < needed + 1; i++) Areas.on_kill(s); // quota + boss hit
     // Gold burst landed at b1 and never again; exp at b2; chest at needed.
     expect(s.total_gold_earned >= Config.AREA_NODE_GOLD).toBe(true);
     expect(s.total_exp_earned >= Config.AREA_NODE_EXP).toBe(true);

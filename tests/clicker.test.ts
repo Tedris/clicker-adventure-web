@@ -56,7 +56,11 @@ describe("Clicker System", () => {
     const clicker = new Clicker();
     const state = st();
     state.area_kills = Config.AREA_KILL_TARGETS[0] - 1;
-    clicker.click(state);
+    clicker.click(state); // milestone kill fills the meter
+    expect(state.area_index).toBe(0);
+    expect(state.area_kills).toBe(Config.AREA_KILL_TARGETS[0]);
+    clicker.spawn_new_monster();
+    clicker.click(state); // boss click advances
     expect(state.area_index).toBe(1);
     expect(state.area_kills).toBe(0);
   });

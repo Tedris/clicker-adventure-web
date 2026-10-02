@@ -64,9 +64,11 @@ export class UpgradePanel {
   // Live rail rect + fitted card size; clamps scroll into the overflow range.
   geometry(width: number, height: number): { rail: Rect; fit: ReturnType<typeof Layout.fit_rail> } {
     const z = Layout.zones(width, height, { left: this.collapsed });
-    const fit = Layout.fit_rail(z.rail_l.h, this.keys.length);
+    // Cards live below the chevron tab row so the tab never covers text.
+    const rail = Layout.rail_body(z.rail_l);
+    const fit = Layout.fit_rail(rail.h, this.keys.length);
     this.scroll_offset = Math.max(0, Math.min(fit.overflow, this.scroll_offset));
-    return { rail: z.rail_l, fit };
+    return { rail, fit };
   }
 
   scroll_by(amount: number, width: number, height: number): Rect {

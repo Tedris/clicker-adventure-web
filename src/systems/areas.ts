@@ -80,29 +80,43 @@ export class Areas {
     }
   }
 
-  // One kill in. Returns a toast line when the milestone kill advanced the
-  // area (boss defeated), or null on a plain kill. Each harvested node
-  // (Coin pile, EXP orb, Treasure Chest) pays once on its boundary crossing.
+  // One kill in. Kills count up to the area target and then STOP — the
+  // filled meter means the milestone boss has spawned. Every click after
+  // that is a boss hit: it pays the Treasure Chest once, advances the area
+  // (or laps the final one), resets the counter and returns the toast.
   // The milestone also lifts highest_area, the furthest unlocked area that
-  // travel chevrons walk back into; cleared-area bonuses read highest_area,
-  // never the walked-back row.
+  // travel walks back into; cleared-area bonuses read highest_area, never
+  // the walked-back row.
   static on_kill(state: GameState): string | null {
     const idx = Math.max(0, Math.min(state.area_index ?? 0, Config.AREAS.length - 1));
-    const prev = Math.max(0, state.area_kills ?? 0);
-    state.area_kills = prev + 1;
-    const k = state.area_kills;
     const needed = Config.AREA_KILL_TARGETS[idx];
+    const prev = Math.max(0, state.area_kills ?? 0);
+
+    // Boss phase: the meter is full, this click is the boss hit.
+    if (prev >= needed) {
+      Areas._credit(state, 0, 0, Config.AREA_NODE_TOKENS);
+      state.area_kills = 0;
+      if (idx < Config.AREAS.length - 1) {
+        state.area_index = idx + 1;
+        state.highest_area = Math.max(state.highest_area ?? idx, idx + 1);
+        return `Boss down! Now in: ${Config.AREAS[idx + 1].name}`;
+      }
+      return "Final boss down! The grind goes on.";
+    }
+
+    const k = prev + 1;
+    state.area_kills = k;
     const [b1, b2] = Areas.node_bounds(needed);
     if (prev < b1 && k >= b1) Areas._credit(state, Config.AREA_NODE_GOLD, 0, 0);
     else if (prev < b2 && k >= b2) Areas._credit(state, 0, Config.AREA_NODE_EXP, 0);
-    if (prev < needed && k >= needed) Areas._credit(state, 0, 0, Config.AREA_NODE_TOKENS);
-    if (state.area_kills >= needed && idx < Config.AREAS.length - 1) {
-      state.area_index = idx + 1;
-      state.highest_area = Math.max(state.highest_area ?? idx, idx + 1);
-      state.area_kills = 0;
-      return `Area cleared! Now in: ${Config.AREAS[idx + 1].name}`;
-    }
     return null;
+  }
+
+  // Meter-full check for the boss aura/hint: the quota is met and the boss
+  // click is pending.
+  static boss_ready(state: GameState): boolean {
+    const idx = Math.max(0, Math.min(state.area_index ?? 0, Config.AREAS.length - 1));
+    return Math.max(0, state.area_kills ?? 0) >= Config.AREA_KILL_TARGETS[idx];
   }
 
   // Walk the current position back and forth inside the unlocked ladder

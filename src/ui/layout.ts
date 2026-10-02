@@ -65,6 +65,14 @@ export function rail_tab(rail: Rect, side: "left" | "right"): Rect {
   return { x, y: rail.y, w: s, h: s };
 }
 
+// Rail body: the area BELOW the chevron tab row. Headers and cards start
+// here so the tab square never sits on top of a line of text — the tab owns
+// the top strip across the full rail width by construction.
+export function rail_body(rail: Rect): Rect {
+  const t = Config.RAIL_TAB_SIZE;
+  return { x: rail.x, y: rail.y + t, w: rail.w, h: Math.max(0, rail.h - t) };
+}
+
 // Bottom-bar items, all window-derived: pull (left), pity (reads as the
 // pull's price tag, right next to it), stats (Phase 8 info entry, left of
 // prestige), prestige (PREST-02 entry, left of reset), reset (right edge).
@@ -348,6 +356,7 @@ export function area_menu(ww: number, wh: number, count: number) {
 const Layout = {
   rail_width,
   rail_tab,
+  rail_body,
   zones,
   bar_items,
   prestige_panel,

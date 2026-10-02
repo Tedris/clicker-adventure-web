@@ -12,7 +12,7 @@ import Layout, { type CollapseOpts, type Rect, type RosterGrid } from "./layout"
 import createState from "../state";
 import { createSpriteCanvas } from "../pixelart";
 import Achievements from "../systems/achievements";
-import Areas from "../systems/areas";
+import Areas, { type NodeFlags } from "../systems/areas";
 import Prestige from "../systems/prestige";
 import UpgradePanel from "./upgrades_panel";
 import type { Clicker } from "../systems/clicker";
@@ -356,7 +356,7 @@ export class MainScene {
 
   private _roster_grid(): RosterGrid {
     const rail = this._zones().rail_r;
-    return Layout.roster_grid(rail.w, rail.h, this._roster_groups().length);
+    return Layout.roster_grid(rail.w, rail.h - Config.RAIL_TAB_SIZE, this._roster_groups().length);
   }
 
   // Duplicate hires merge into ONE card (Pet Simulator 99 pet-bag model):
@@ -405,6 +405,7 @@ export class MainScene {
     // Monster + pop effects + humor bubble (handled by the clicker system;
     // idle bob, squash-on-click and respawn fade all live there).
     this.clicker?.draw(ctx, this._zones().stage);
+    this._draw_boss_aura(ctx, state);
 
     this._draw_kill_meter(ctx, state);
     this._draw_area_line(ctx, state);
@@ -617,8 +618,10 @@ export class MainScene {
     const p = Areas.progress(state);
     const remaining = Math.max(0, p.needed - p.kills);
     const meter = Layout.meter_rect(this._w, this._h, this._collapse());
-    const text = `Area ${p.index + 1}: ${p.name} · Boss in ${remaining}`;
-    this._text(ctx, this._fit_text(ctx, text, z.stage.w), z.stage.x, meter.y + meter.h + 4,
+    const tail = remaining > 0 ? `Boss in ${remaining}` : "Boss ready - click it!";
+    const text = `Area ${p.index + 1}: ${p.name} · ${tail}`;
+    const row_y = meter.y + meter.h + 4;
+    this._text(ctx, this._fit_text(ctx, text, z.stage.w), z.stage.x, row_y,
       Config.PITY_NORMAL_COLOR, { align: "center", box: z.stage.w });
 
     const nav = this._area_nav();
@@ -628,26 +631,75 @@ export class MainScene {
     this._text(ctx, p.index < highest ? ">" : "-", nav.next.x, nav.next.y + 5,
       Config.PITY_NORMAL_COLOR, { align: "center", box: nav.next.w });
 
-    // PS99-style node strip: which pickups this area still owes, in harvest
-    // order. Hidden when the second row would touch the bottom bar.
-    const flags = Areas.node_flags(p.kills, p.needed);
-    const on = (v: boolean): string => (v ? "+" : "-");
-    const nodes = `Coins ${on(flags.coins)} Exp ${on(flags.exp)} Chest ${on(flags.chest)}`;
-    const y2 = meter.y + meter.h + 4 + Config.FONT_SIZE + 2;
-    if (y2 + Config.FONT_SIZE <= z.bar.y) {
-      this._text(ctx, this._fit_text(ctx, nodes, z.stage.w), z.stage.x, y2,
-        Config.OFFLINE_REPORT_HINT_COLOR, { align: "center", box: z.stage.w });
+    // PS99-style pickup icons under the readout: coin pile, EXP orb, treasure
+    // chest — bright once harvested, dim while pending, clicked left to right.
+    const icons_y = row_y + Config.FONT_SIZE + 3;
+    if (icons_y + 10 <= z.bar.y) {
+      this._draw_node_icons(ctx, z.stage, icons_y, Areas.node_flags(p.kills, p.needed));
     }
   }
 
-  // Full-width band under the kill meter: the chevrons walk inside it, and a
-  // tap between them opens the area menu. Shared by draw-adjacent logic and
-  // the click router so both agree on where the strip lives.
+  // Three tiny shape glyphs (coin circle / EXP diamond / chest rect) centered
+  // as one row: bright = harvested, faded = still waiting.
+  private _draw_node_icons(
+    ctx: CanvasRenderingContext2D,
+    stage: { x: number; y: number; w: number; h: number },
+    y: number,
+    flags: NodeFlags,
+  ): void {
+    const items: Array<[boolean, readonly number[]]> = [
+      [flags.coins, Config.POP_COLOR_GOLD],
+      [flags.exp, Config.POP_COLOR_EXP],
+      [flags.chest, Config.POP_COLOR_TOKEN],
+    ];
+    const pitch = 26;
+    const cx = Math.floor(stage.x + stage.w / 2);
+    for (let i = 0; i < items.length; i++) {
+      ctx.fillStyle = rgba(items[i][1], items[i][0] ? 0.95 : 0.35);
+      const x = cx + (i - 1) * pitch;
+      if (i === 0) {
+        ctx.beginPath();
+        ctx.arc(x, y + 5, 5, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (i === 1) {
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + 5, y + 5);
+        ctx.lineTo(x, y + 10);
+        ctx.lineTo(x - 5, y + 5);
+        ctx.closePath();
+        ctx.fill();
+      } else {
+        ctx.fillRect(x - 6, y + 2, 12, 8);
+        ctx.fillRect(x - 6, y, 12, 2);
+      }
+    }
+  }
+
+  // Gold ring around the monster once the kill quota is met: this is the
+  // boss, and the next click on it advances the area.
+  private _draw_boss_aura(ctx: CanvasRenderingContext2D, state: GameState): void {
+    if (!this.clicker || !Areas.boss_ready(state)) return;
+    const stage = this._zones().stage;
+    const cx = stage.x + stage.w / 2 + this.clicker.pos_x;
+    const cy = stage.y + stage.h / 2 + this.clicker.pos_y + this.clicker.idle_offset;
+    ctx.strokeStyle = rgba(Config.POP_COLOR_GOLD, 0.9);
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, Config.MONSTER_SIZE / 2 + 6, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.lineWidth = 1;
+  }
+
+  // Band holding the two text rows under the kill meter: chevrons walk, and
+  // a dead click BETWEEN them opens the area menu. Tight to the drawn rows
+  // so empty stage space below keeps its normal fall-through behavior.
   private _area_bar_rect(): Rect {
     const z = this._zones();
     const meter = Layout.meter_rect(this._w, this._h, this._collapse());
     const y = meter.y + meter.h;
-    return { x: z.stage.x, y, w: z.stage.w, h: Math.max(0, z.bar.y - y) };
+    const bottom = Math.min(z.bar.y, y + 4 + Config.FONT_SIZE * 2 + 3 + 10 + 4);
+    return { x: z.stage.x, y, w: z.stage.w, h: Math.max(0, bottom - y) };
   }
 
   // Area menu modal: chips pick any unlocked area (instant travel), info
@@ -801,10 +853,13 @@ export class MainScene {
 
   private _draw_roster(ctx: CanvasRenderingContext2D): void {
     const rail = this._zones().rail_r;
+    // Cards and header live BELOW the chevron tab row so the tab square
+    // never sits on top of text.
+    const body = Layout.rail_body(rail);
     const groups = this._roster_groups();
     const total = groups.length;
     const equipped = this.state?.equipped ?? [];
-    const g = Layout.roster_grid(rail.w, rail.h, total);
+    const g = Layout.roster_grid(body.w, body.h, total);
     const scroll = this.roster_scroll_offset;
     const pad = Config.ROSTER_PANEL_PADDING;
     const cs = Config.ROSTER_CARD_SIZE;
@@ -812,19 +867,19 @@ export class MainScene {
 
     this._panel_chrome(ctx, rail);
     if (this.right_collapsed) return;
-    this._text(ctx, `Waifus (${total})`, rail.x + pad, rail.y + pad, Config.POP_COLOR_WHITE);
+    this._text(ctx, `Waifus (${total})`, body.x + pad, body.y + pad, Config.POP_COLOR_WHITE);
 
     // Cards: every slot from Layout.roster_slot, clipped below the header so
     // scrolling never smears onto it. Cull first, clip second — no bleed at
     // either boundary.
     ctx.save();
     ctx.beginPath();
-    ctx.rect(rail.x, rail.y + g.grid_top, rail.w, rail.h - g.grid_top);
+    ctx.rect(body.x, body.y + g.grid_top, body.w, body.h - g.grid_top);
     ctx.clip();
     ctx.lineWidth = 2;
     for (let i = 1; i <= total; i++) {
-      const s_rect = Layout.roster_slot(rail, g, i, scroll);
-      if (s_rect.y + s_rect.h >= rail.y + g.grid_top && s_rect.y <= rail.y + rail.h) {
+      const s_rect = Layout.roster_slot(body, g, i, scroll);
+      if (s_rect.y + s_rect.h >= body.y + g.grid_top && s_rect.y <= body.y + body.h) {
         const group = groups[i - 1];
         if (group && group.name) {
           const waifu = group.waifu;
@@ -888,7 +943,7 @@ export class MainScene {
     // Empty slot placeholders (only while the roster does not fill its
     // visible grid — exactly when max_scroll is 0, so no scroll term).
     for (let i = total + 1; i <= g.visible; i++) {
-      const s_rect = Layout.roster_slot(rail, g, i, 0);
+      const s_rect = Layout.roster_slot(body, g, i, 0);
       ctx.fillStyle = rgba(Config.BG_COLOR.map((v) => v * 0.85) as number[], 0.5);
       ctx.fillRect(s_rect.x, s_rect.y, cs, cs + Config.ROSTER_LABEL_HEIGHT);
       ctx.fillStyle = rgba([102, 102, 115, 153]);
@@ -915,9 +970,10 @@ export class MainScene {
     const rail = this._zones().rail_r;
     if (x < rail.x || x > rail.x + rail.w || y < rail.y || y > rail.y + rail.h) return null;
     const groups = this._roster_groups();
-    const grid = Layout.roster_grid(rail.w, rail.h, groups.length);
+    const body = Layout.rail_body(rail);
+    const grid = Layout.roster_grid(body.w, body.h, groups.length);
     for (let i = 1; i <= groups.length; i++) {
-      const s_rect = Layout.roster_slot(rail, grid, i, this.roster_scroll_offset);
+      const s_rect = Layout.roster_slot(body, grid, i, this.roster_scroll_offset);
       if (x >= s_rect.x && x <= s_rect.x + s_rect.w && y >= s_rect.y && y <= s_rect.y + s_rect.h) {
         const group = groups[i - 1];
         return group && group.name ? i : null;
