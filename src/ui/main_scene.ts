@@ -13,6 +13,7 @@ import createState from "../state";
 import { createSpriteCanvas } from "../pixelart";
 import Achievements from "../systems/achievements";
 import Areas, { type NodeFlags } from "../systems/areas";
+import Mastery from "../systems/mastery";
 import Prestige from "../systems/prestige";
 import UpgradePanel from "./upgrades_panel";
 import type { Clicker } from "../systems/clicker";
@@ -101,9 +102,11 @@ export class MainScene {
   _w: number = Config.WINDOW_WIDTH;
   _h: number = Config.WINDOW_HEIGHT;
 
-  // Rail collapse state (Clicker Heroes style). Runtime-only, never persisted.
-  left_collapsed = false;
+  // Rail collapse state for the roster rail (Clicker Heroes style). The left
+  // rail is retired — skills moved into their own modal. Runtime-only.
   right_collapsed = false;
+  // Skills modal (upgrade lattice). Runtime-only, never persisted.
+  skills_panel_open = false;
 
   show_session_stats = false;
   showing_pull_screen = false;
@@ -369,7 +372,7 @@ export class MainScene {
   }
 
   private _collapse(): CollapseOpts {
-    return { left: this.left_collapsed, right: this.right_collapsed };
+    return { right: this.right_collapsed };
   }
 
   private _zones(): ReturnType<typeof Layout.zones> {
@@ -415,12 +418,6 @@ export class MainScene {
     ctx.fillStyle = rgba(Areas.area_bg(state) as number[]);
     ctx.fillRect(0, 0, width, height);
 
-    // Upgrade panel (left rail, behind the monster).
-    if (this.upgrade_ui) {
-      this.upgrade_ui.collapsed = this.left_collapsed;
-      this.upgrade_ui.draw(ctx, state, width, height);
-    }
-
     this._draw_roster(ctx);
     this._draw_rail_tabs(ctx);
 
@@ -444,6 +441,9 @@ export class MainScene {
     if (this.prestige_panel_open) this._draw_prestige_panel(ctx, state);
     if (this.stats_panel_open) this._draw_stats_panel(ctx, state);
     if (this.area_menu_open) this._draw_area_menu(ctx, state);
+    if (this.skills_panel_open && this.upgrade_ui) {
+      this.upgrade_ui.draw(ctx, state, width, height);
+    }
 
     // FEEL-03: coalesced event lane drawn ABOVE every panel tier (it must
     // stay visible while a modal is open) but BELOW the welcome-back modal.
@@ -570,6 +570,19 @@ export class MainScene {
     ctx.strokeRect(a.x, a.y, a.w, a.h);
     this._text(ctx, `Areas ${Areas.progress(state).index + 1} >`, a.x, a.y + (a.h - Config.FONT_SIZE) / 2,
       Config.POP_COLOR_WHITE, { align: "center", box: a.w });
+
+    // Skills button: the lattice entry, left of Areas, same chrome language.
+    // It glows when a track is actually affordable — the cue to spend.
+    const s = b.skills;
+    const cue_ready = this.upgrades && this.upgrades.next_affordable(state)[0] !== null;
+    ctx.fillStyle = rgba(cue_ready
+      ? Config.POP_COLOR_GOLD
+      : Config.BG_COLOR.map((v) => v * 1.6) as number[], 0.9);
+    ctx.fillRect(s.x, s.y, s.w, s.h);
+    ctx.strokeStyle = rgba(Config.BG_COLOR.map((v) => v * 2.2) as number[]);
+    ctx.strokeRect(s.x, s.y, s.w, s.h);
+    this._text(ctx, "Skills", s.x, s.y + (s.h - Config.FONT_SIZE) / 2,
+      Config.POP_COLOR_WHITE, { align: "center", box: s.w });
   }
 
   // Panel fill + border pair used by HUD / roster / bars.
@@ -586,9 +599,8 @@ export class MainScene {
   // its background strip here (the card/list lanes skip drawing when collapsed).
   private _draw_rail_tabs(ctx: CanvasRenderingContext2D): void {
     const z = this._zones();
-    if (this.left_collapsed) this._panel_chrome(ctx, z.rail_l);
+    if (this.right_collapsed) this._panel_chrome(ctx, z.rail_r);
     const tabs: Array<[Rect, string]> = [
-      [Layout.rail_tab(z.rail_l, "left"), this.left_collapsed ? "<" : ">"],
       [Layout.rail_tab(z.rail_r, "right"), this.right_collapsed ? ">" : "<"],
     ];
     for (const [t, glyph] of tabs) {
@@ -860,7 +872,9 @@ export class MainScene {
     // Pity counter reads as the pull button's price tag, anchored next to it.
     const pity_counter = state.pity_counter ?? 0;
     const warning = pity_counter >= Config.PITY_SOFT;
-    this._text(ctx, `Pity: ${pity_counter}/${Config.PITY_HARD}${warning ? "!!!" : ""}`,
+    const luck = Mastery.luck_multiplier(state);
+    const luck_note = luck > 1 ? ` Luck ${luck.toFixed(2)}x` : "";
+    this._text(ctx, `Pity: ${pity_counter}/${Config.PITY_HARD}${warning ? "!!!" : ""}${luck_note}`,
       b.pity.x, b.pity.y + 16, warning ? Config.PITY_WARNING_COLOR : Config.PITY_NORMAL_COLOR);
 
     // Stats entry: always-live info button (FEEL-02), static fill, same
@@ -1244,6 +1258,16 @@ export class MainScene {
     this._text(ctx, this._fit_text(ctx, on_clock ? `Assigned: ${area_name}` : `Assign to ${area_name}`, btn.w - 8),
       btn.x + 4, btn.y + (btn.h - Config.FONT_SIZE) / 2, Config.POP_COLOR_WHITE);
 
+    // Fuse button (PS99 duplicate fusion): only appears once enough copies
+    // exist to roll them into one stronger instance.
+    if ((group?.count ?? 1) >= Config.FUSE_MIN_COPIES) {
+      const fb = this._fuse_btn();
+      ctx.fillStyle = rgba(Config.PULL_BTN_COLOR, 0.9);
+      ctx.fillRect(fb.x, fb.y, fb.w, fb.h);
+      this._text(ctx, this._fit_text(ctx, `Fuse x${group?.count} -> next tier`, fb.w - 8),
+        fb.x + 4, fb.y + (fb.h - Config.FONT_SIZE) / 2, Config.POP_COLOR_WHITE);
+    }
+
     // Phase 15 (INP-04): dismiss affordance on the panel bottom pad line.
     this._text(ctx, "tap anywhere to close", d.inner.x,
       d.panel.y + d.panel.h - Config.LAYOUT_MARGIN - Config.FONT_SIZE,
@@ -1260,6 +1284,11 @@ export class MainScene {
       w: d.inner.w,
       h,
     };
+  }
+  // Fuse button rect: stacked directly above the equip button.
+  _fuse_btn(): Rect {
+    const btn = this._equip_btn();
+    return { x: btn.x, y: btn.y - btn.h - 6, w: btn.w, h: btn.h };
   }
   // PREST-02: centered review modal. Reuses the welcome-back visual language
   // and the reset-modal two-step arm/confirm. Lists iterate the system's
@@ -1367,6 +1396,8 @@ export class MainScene {
       ["Badge Rewards:", "+" + Format.number(st.badge_reward_gold ?? 0) + "g +"
         + Format.number(st.badge_reward_tokens ?? 0) + "t"],
       ["Achievements Unlocked:", mastery],
+      ["Mastery:", String(Mastery.total_levels(state))
+        + " (+" + Math.round(Config.MASTERY_GOLD_PER_LEVEL * Mastery.total_levels(state) * 100) + "% gold)"],
     ];
     rows.slice(0, block.rows).forEach((row, i) => {
       this._text(ctx, `${row[0]} ${row[1]}`, p.panel.x + pad, block.y + i * lh,
@@ -1425,6 +1456,12 @@ export class MainScene {
         if (group && this.waifu) this.waifu.toggle_assign(state, group.name);
         return true;
       }
+      const fb = this._fuse_btn();
+      if (state && x >= fb.x && x <= fb.x + fb.w && y >= fb.y && y <= fb.y + fb.h) {
+        const group = this._roster_groups()[this.waifu_detail_index - 1];
+        if (group && this.waifu) this.waifu.fuse(state, group.name);
+        return true;
+      }
       this.waifu_detail_index = null;
       return true;
     }
@@ -1472,6 +1509,15 @@ export class MainScene {
       if (!inside) this.area_menu_open = false;
       return true;
     }
+    // Skills modal: chip selects, buy button spends; any other click closes.
+    if (this.skills_panel_open) {
+      if (state && this.upgrade_ui
+        && this.upgrade_ui.check_click(x, y, state, this._w, this._h)) {
+        return true;
+      }
+      this.skills_panel_open = false;
+      return true;
+    }
     // Header Areas button: the primary entry into the zone menu.
     const b_items = Layout.bar_items(this._w, this._h, this._collapse());
     const ab = b_items.areas;
@@ -1479,22 +1525,18 @@ export class MainScene {
       this.area_menu_open = !this.area_menu_open;
       return true;
     }
+    // Header Skills button: opens the upgrade lattice modal.
+    const sb = b_items.skills;
+    if (x >= sb.x && x <= sb.x + sb.w && y >= sb.y && y <= sb.y + sb.h) {
+      this.skills_panel_open = !this.skills_panel_open;
+      return true;
+    }
     // Rail chevrons collapse/expand; while collapsed, any tap on the strip
     // expands it again (Clicker Heroes pattern).
     const z = this._zones();
-    const lt = Layout.rail_tab(z.rail_l, "left");
-    if (x >= lt.x && x <= lt.x + lt.w && y >= lt.y && y <= lt.y + lt.h) {
-      this.left_collapsed = !this.left_collapsed;
-      return true;
-    }
     const rt = Layout.rail_tab(z.rail_r, "right");
     if (x >= rt.x && x <= rt.x + rt.w && y >= rt.y && y <= rt.y + rt.h) {
       this.right_collapsed = !this.right_collapsed;
-      return true;
-    }
-    if (this.left_collapsed && x <= z.rail_l.x + z.rail_l.w && y >= z.rail_l.y
-      && y <= z.rail_l.y + z.rail_l.h) {
-      this.left_collapsed = false;
       return true;
     }
     if (this.right_collapsed && x >= z.rail_r.x && y >= z.rail_r.y
@@ -1576,11 +1618,6 @@ export class MainScene {
         return true;
       }
     }
-    // Upgrade card clicks (after the monster hitbox check).
-    if (this.upgrade_ui && this.upgrade_ui.check_click(x, y, state, this._w, this._h)) {
-      return true;
-    }
-
     // Phase 15 (INP-04): DBG/INFO toggles sit ABOVE the bar row, so they test
     // their own y-range ahead of the bar block. Flip bodies mirror the
     // keyboard lanes so both behave identically.
@@ -1650,7 +1687,7 @@ export class MainScene {
     this._hover_x = x;
     this._hover_y = y;
     if (this.showing_pull_screen || this.waifu_detail_index || this.stats_panel_open ||
-        this.area_menu_open ||
+        this.area_menu_open || this.skills_panel_open ||
         (this.state && (this.state.offline_report || this.state.login_report))) {
       this.prestige_confirm_hover = false;
       return;
@@ -1673,19 +1710,14 @@ export class MainScene {
     if (dx === 0 && dy === 0) return;
     if (mx === undefined) { mx = this._hover_x ?? undefined; my = this._hover_y ?? undefined; }
     const amount = -dy * Config.ROSTER_SCROLL_SPEED;
-    if (this.showing_pull_screen || this.waifu_detail_index || this.area_menu_open) return;
+    // The Skills modal is a fixed one-screen lattice: while it (or any other
+    // full overlay lane) is open, the wheel stays with that lane.
+    if (this.showing_pull_screen || this.waifu_detail_index || this.area_menu_open ||
+        this.skills_panel_open) return;
     if (this.stats_panel_open) {
       const sp = Layout.stats_panel(this._w, this._h, Config.ACHIEVEMENTS.length);
       this.stats_scroll_offset = Math.max(0, Math.min(sp.list.max_scroll, this.stats_scroll_offset + amount));
       return;
-    }
-    if (mx !== undefined && my !== undefined) {
-      const z = this._zones();
-      const rail_l = z.rail_l;
-      if (mx >= rail_l.x && mx <= rail_l.x + rail_l.w && my >= rail_l.y && my <= rail_l.y + rail_l.h) {
-        if (this.upgrade_ui) this.upgrade_ui.scroll_by(amount, this._w, this._h);
-        return;
-      }
     }
     const grid = this._roster_grid();
     this.roster_scroll_offset = Math.max(0, Math.min(grid.max_scroll, this.roster_scroll_offset + amount));

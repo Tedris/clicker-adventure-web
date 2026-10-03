@@ -99,7 +99,8 @@ export const Definitions: Record<string, UpgradeDefinition> = {
 };
 
 // D-09 pacing order, mirrored from the loop sim PRIORITY. The UI consumes
-// the results and never materializes a second copy.
+// the results and never materializes a second copy. The order IS the lattice
+// chain: each track unlocks off its predecessor (Pets-Go skill-tree shape).
 export const PRIORITY: string[] = [
   "click_multiplier",
   "unlock_passive",
@@ -108,6 +109,15 @@ export const PRIORITY: string[] = [
   "exp_multiplier",
   "crit_chance",
 ];
+
+// Lattice edges: child key -> parent key. click_multiplier is the root.
+export const PREREQS: Record<string, string> = {
+  unlock_passive: "click_multiplier",
+  idle_rate: "unlock_passive",
+  gold_multiplier: "idle_rate",
+  exp_multiplier: "gold_multiplier",
+  crit_chance: "exp_multiplier",
+};
 
 function log(...args: unknown[]): void {
   if (Config.DEBUG_MODE) console.log(...args);
@@ -140,6 +150,30 @@ export class Upgrades {
     }
   }
 
+  // Lattice gate: a track is live once its parent reached UPGRADE_PREREQ_LEVEL
+  // (capped by the parent's own max, so a 1-level node like Idle Generation
+  // passes its child at level 1). The root has no parent and is always live.
+  is_unlocked(upgrade_key: string): boolean {
+    const parent = PREREQS[upgrade_key];
+    if (!parent) return true;
+    const parent_def = this.Definitions[parent];
+    if (!parent_def) return true;
+    const need = Math.min(Config.UPGRADE_PREREQ_LEVEL, parent_def.max_level);
+    return (this.upgrades[parent] || 0) >= need;
+  }
+
+  // Locked-gate readout for the UI: [parent name, needed level], or null
+  // when the track is live. Derived, never stored.
+  locked_by(upgrade_key: string): [string, number] | null {
+    if (this.is_unlocked(upgrade_key)) return null;
+    const parent = PREREQS[upgrade_key];
+    const need = Math.min(
+      Config.UPGRADE_PREREQ_LEVEL,
+      this.Definitions[parent]?.max_level ?? Config.UPGRADE_PREREQ_LEVEL,
+    );
+    return [this.Definitions[parent]?.name ?? parent, need];
+  }
+
   can_afford(upgrade_key: string, state: GameState): boolean {
     const cost = this.get_cost(upgrade_key, this.upgrades[upgrade_key] || 0);
     return state.gold >= cost;
@@ -151,6 +185,9 @@ export class Upgrades {
     if (!def) throw new Error(`Unknown upgrade key: ${upgrade_key}`);
     if (!(level < def.max_level)) {
       throw new Error(`Upgrade at max level: ${upgrade_key}`);
+    }
+    if (!this.is_unlocked(upgrade_key)) {
+      throw new Error(`Upgrade locked: ${upgrade_key}`);
     }
     const cost = this.get_cost(upgrade_key, level);
     if (!(state.gold >= cost)) {
@@ -182,7 +219,7 @@ export class Upgrades {
     let best_key: string | null = null;
     let best_cost: number | null = null;
     for (const key of PRIORITY) {
-      if (!this.is_maxed(key) && this.can_afford(key, state)) {
+      if (!this.is_maxed(key) && this.is_unlocked(key) && this.can_afford(key, state)) {
         const cost = this.get_cost(key, this.upgrades[key] || 0);
         if (best_cost === null || cost < best_cost) {
           best_cost = cost;
@@ -201,7 +238,7 @@ export class Upgrades {
     let best_key: string | null = null;
     let best_cost: number | null = null;
     for (const key of PRIORITY) {
-      if (!this.is_maxed(key)) {
+      if (!this.is_maxed(key) && this.is_unlocked(key)) {
         const cost = this.get_cost(key, this.upgrades[key] || 0);
         if (best_cost === null || cost < best_cost) {
           best_cost = cost;

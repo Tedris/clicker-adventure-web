@@ -82,12 +82,12 @@ describe("Waifu System", () => {
       expect(gm).toBe(0);
     });
 
-    it("Two Karen-equivalent waifus yield 0.20 multiplier", () => {
+    it("Two same-type waifus decay: 0.10 full + 0.06 at the 60% slot", () => {
       const waifu = new Waifu();
       const [tm, gm] = waifu.get_bonus_multiplier(
         stateWith([wi("Karen", "tokens", 0.10), wi("Karen2", "tokens", 0.10)]),
       );
-      expect(tm).toBeCloseTo(0.20, 3);
+      expect(tm).toBeCloseTo(0.16, 3);
       expect(gm).toBe(0);
     });
 
@@ -129,7 +129,7 @@ describe("Waifu System", () => {
           wi("Karen2", "tokens", 0.05),
         ]),
       );
-      expect(tm).toBeCloseTo(0.15, 3);
+      expect(tm).toBeCloseTo(0.13, 3);
       expect(gm).toBe(0.20);
     });
 
@@ -191,8 +191,9 @@ describe("Waifu System", () => {
         wi("A", "gold", 0.05), wi("B", "gold", 0.20), wi("C", "gold", 0.10), wi("D", "gold", 0.15),
       ];
       const [tm, gm] = waifu.get_bonus_multiplier(stateWith(roster));
-      // Top three by value: B 0.20 + D 0.15 + C 0.10 — A falls out.
-      expect(gm).toBeCloseTo(0.45, 3);
+      // Top three by value with the decay curve: B 0.20 full + D 0.15 at 60%
+      // + C 0.10 at 38% — A falls out.
+      expect(gm).toBeCloseTo(0.328, 3);
       expect(tm).toBe(0);
     });
 
@@ -202,7 +203,7 @@ describe("Waifu System", () => {
         wi("Hank", "tokens", 0.15), wi("Rosa", "gold", 0.08), wi("Hank", "tokens", 0.18),
       ];
       const [tm, gm] = waifu.get_bonus_multiplier(stateWith(roster, ["Hank"]));
-      expect(tm).toBeCloseTo(0.33, 3); // both Hank copies stack
+      expect(tm).toBeCloseTo(0.27, 3); // Hank 0.18 full + 0.15 at the 60% slot
       expect(gm).toBe(0);
     });
 
@@ -394,6 +395,53 @@ describe("Waifu System", () => {
       passiveTick(state, new Waifu());
       expect(state.gold).toBeCloseTo(5.0, 3);
       expect(state.total_gold_earned).toBeCloseTo(5.0, 3);
+    });
+  });
+
+  describe("Duplicate fusion (fuse)", () => {
+    function fusedState(copies: WaifuInstance[]): GameState {
+      return { waifus: copies } as unknown as GameState;
+    }
+
+    it("two same-name copies collapse into one instance one rarity step up", () => {
+      const waifu = new Waifu();
+      const state = fusedState([
+        wi("Karen", "tokens", 0.10),
+        wi("Karen", "tokens", 0.13),
+        wi("Steve", "gold", 0.05),
+      ]);
+      const fused = waifu.fuse(state, "Karen")!;
+      expect(fused.rarity).toBe("rare");
+      // best copy 0.13 rescaled by rare/common tier ratio 1.5 -> 0.195
+      expect(fused.bonus_value).toBeCloseTo(0.195, 3);
+      expect(state.waifus.length).toBe(2);
+      expect(state.waifus[0].name).toBe("Karen"); // first-slot position kept
+      expect(state.waifus[1].name).toBe("Steve");
+    });
+
+    it("a single copy cannot fuse", () => {
+      const waifu = new Waifu();
+      const state = fusedState([wi("Karen", "tokens", 0.10)]);
+      expect(waifu.fuse(state, "Karen")).toBeNull();
+      expect(state.waifus.length).toBe(1);
+    });
+
+    it("legendary copies keep the top tier and just merge bonuses", () => {
+      const waifu = new Waifu();
+      const state = fusedState([
+        { name: "Karen", bonus_type: "tokens", bonus_value: 0.35, rarity: "legendary" },
+        { name: "Karen", bonus_type: "tokens", bonus_value: 0.30, rarity: "legendary" },
+      ] as unknown as WaifuInstance[]);
+      const fused = waifu.fuse(state, "Karen")!;
+      expect(fused.rarity).toBe("legendary");
+      expect(fused.bonus_value).toBe(0.35);
+    });
+
+    it("fusing an unknown name returns null without touching the roster", () => {
+      const waifu = new Waifu();
+      const state = fusedState([wi("Steve", "gold", 0.05)]);
+      expect(waifu.fuse(state, "Nobody")).toBeNull();
+      expect(state.waifus.length).toBe(1);
     });
   });
 });

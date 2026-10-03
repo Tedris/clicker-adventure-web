@@ -1,13 +1,16 @@
 // src/ui/upgrades_panel.ts
-// Port of src/ui/upgrades.lua: the left upgrade rail. Cards are fitted by
-// Layout.fit_rail (compressed heights, wheel-scrollable overflow), buy
-// buttons route through the Upgrades system, and the FEEL-02 target cue
-// comes from next_affordable / save_toward — the UI never re-derives cost
-// or order math. Geometry takes explicit (width, height); no DOM access.
+// The Skills modal: the upgrade lattice rendered as its own centered panel
+// (same modal family as Stats/Prestige/Area menu). The lattice reads as a
+// horizontal chip row — one chip per track in chain order with connector
+// segments in the gutters — plus an info block for the selected track and a
+// single buy button. All cost/gating math comes from the Upgrades system;
+// the UI never re-derives it. Geometry from Layout.skills_panel with
+// explicit (width, height); no DOM access.
 
 import Config from "../config";
 import Format from "../format";
 import Layout, { type Rect } from "./layout";
+import { PRIORITY } from "../systems/upgrades";
 import type { GameState } from "../state";
 import type { Upgrades } from "../systems/upgrades";
 
@@ -30,122 +33,103 @@ function draw_text(
   x: number,
   y: number,
   color: readonly number[],
-  opts?: { size?: number; alpha?: number },
+  opts?: { size?: number; align?: "center"; box?: number },
 ): void {
-  ctx.fillStyle = rgba(color, opts?.alpha);
+  ctx.fillStyle = rgba(color);
   ctx.font = `${opts?.size ?? Config.FONT_SIZE}px sans-serif`;
-  ctx.textAlign = "left";
+  ctx.textAlign = opts?.align ?? "left";
   ctx.textBaseline = "top";
-  ctx.fillText(s, Math.round(x), Math.round(y));
+  ctx.fillText(s, Math.round(x), Math.round(y), opts?.box);
 }
+
 export class UpgradePanel {
   upgrades: Upgrades;
   event_handler: PurchaseHandler | null;
-  hovered_card: number | null = null;
   purchase_animations: Record<string, number> = {};
   shake_animations: Record<string, { timer: number }> = {};
   sparkle_animations: Record<string, number> = {};
-  scroll_offset = 0;
-  cue_pulse = 0; // FEEL-02: afford-glow pulse clock (runtime-only)
+  cue_pulse = 0; // afford-glow pulse clock (runtime-only)
   keys: string[];
-  // Rail-collapse flag, mirrored from MainScene before geometry is read.
+  // Selected chip key; null falls back to the chain tip (first live track).
+  selected: string | null = null;
+  // Kept for call-site compatibility with the old rail layout; the modal is
+  // always the full panel.
   collapsed = false;
 
   constructor(upgrades: Upgrades, event_handler?: PurchaseHandler | null) {
     this.upgrades = upgrades;
     this.event_handler = event_handler ?? null;
-    // Clicker Heroes reading order: Click Damage is the headline track, the
-    // rest follow alphabetically as secondary lines.
-    const all = Object.keys(upgrades.Definitions).sort();
-    this.keys = all.includes("click_multiplier")
-      ? ["click_multiplier", ...all.filter((k) => k !== "click_multiplier")]
-      : all;
+    // Pets-Go reading order: the row IS the skill chain — each chip sits
+    // right of the track that unlocks it (PRIORITY is the chain order).
+    this.keys = [...PRIORITY];
   }
 
   card_keys(): string[] {
     return this.keys;
   }
 
-  // Live rail rect + fitted card size; clamps scroll into the overflow range.
-  geometry(width: number, height: number): { rail: Rect; fit: ReturnType<typeof Layout.fit_rail> } {
-    const z = Layout.zones(width, height, { left: this.collapsed });
-    // Cards live below the chevron tab row so the tab never covers text.
-    const rail = Layout.rail_body(z.rail_l);
-    const fit = Layout.fit_rail(rail.h, this.keys.length);
-    this.scroll_offset = Math.max(0, Math.min(fit.overflow, this.scroll_offset));
-    return { rail, fit };
+  geometry(width: number, height: number): ReturnType<typeof Layout.skills_panel> {
+    return Layout.skills_panel(width, height, this.keys.length);
   }
 
-  scroll_by(amount: number, width: number, height: number): Rect {
-    const { rail, fit } = this.geometry(width, height);
-    this.scroll_offset = Math.max(0, Math.min(fit.overflow, this.scroll_offset + amount));
-    return rail;
+  // The modal does not scroll; kept so the wheel router can stay generic.
+  scroll_by(_amount: number, width: number, height: number): Rect {
+    return this.geometry(width, height).panel;
   }
 
   is_over_rail(x: number, y: number, width: number, height: number): boolean {
-    const rail = Layout.zones(width, height, { left: this.collapsed }).rail_l;
-    return x >= rail.x && x <= rail.x + rail.w && y >= rail.y && y <= rail.y + rail.h;
+    const p = this.geometry(width, height).panel;
+    return x >= p.x && x <= p.x + p.w && y >= p.y && y <= p.y + p.h;
   }
 
-  // 0-based card slot rect (index scrolls with scroll_offset).
-  card_position(index: number, width: number, height: number): Rect {
-    const { rail, fit } = this.geometry(width, height);
-    return {
-      x: rail.x,
-      y: rail.y + index * (fit.size + fit.gap) - this.scroll_offset,
-      w: rail.w,
-      h: fit.size,
-    };
+  selected_key(): string {
+    if (this.selected && this.keys.includes(this.selected)) return this.selected;
+    for (const key of this.keys) {
+      if (!this.upgrades.is_maxed(key) && this.upgrades.is_unlocked(key)) return key;
+    }
+    return this.keys[0];
   }
 
-  buy_button_position(card: Rect): Rect {
-    return {
-      x: card.x + 8,
-      y: card.y + card.h - Config.UPGRADE_BUY_BTN_HEIGHT - 4,
-      w: card.w - 16,
-      h: Config.UPGRADE_BUY_BTN_HEIGHT,
-    };
-  }
-  // Hit-test the buy buttons; mirrors the Lua check_click branches:
-  // maxed -> sparkle, affordable -> purchase + event, else shake.
+  // Chip select -> buy button routing. Returns true when the click landed on
+  // the modal's own controls (the scene closes on any other click).
   check_click(x: number, y: number, state: GameState, width: number, height: number): boolean {
+    const p = this.geometry(width, height);
     for (let i = 0; i < this.keys.length; i++) {
-      const card = this.card_position(i, width, height);
-      const btn = this.buy_button_position(card);
-      if (x >= btn.x && x <= btn.x + btn.w && y >= btn.y && y <= btn.y + btn.h) {
-        const upgrade_key = this.keys[i];
-        if (!upgrade_key) continue;
-        if (this.upgrades.is_maxed(upgrade_key)) {
-          this.on_sparkle(upgrade_key);
-          return true;
-        }
-        if (this.upgrades.can_afford(upgrade_key, state)) {
-          const level = this.upgrades.purchase(upgrade_key, state);
-          this.on_purchase(upgrade_key);
-          // FEEL-03 (D-11): a purchase spend is a discrete ledger event —
-          // the scene fires the coalesced lane + gold flash here.
-          if (this.event_handler) {
-            this.event_handler(upgrade_key, this.upgrades.Definitions[upgrade_key].name, level);
-          }
-          return true;
-        }
-        this.on_shake(upgrade_key);
+      const c = p.chips[i];
+      if (x >= c.x && x <= c.x + c.w && y >= c.y && y <= c.y + c.h) {
+        this.selected = this.keys[i];
         return true;
       }
+    }
+    const b = p.buy;
+    if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) {
+      const key = this.selected_key();
+      if (this.upgrades.is_maxed(key)) {
+        this.on_sparkle(key);
+        return true;
+      }
+      if (!this.upgrades.is_unlocked(key)) {
+        this.on_shake(key);
+        return true;
+      }
+      if (this.upgrades.can_afford(key, state)) {
+        const level = this.upgrades.purchase(key, state);
+        this.on_purchase(key);
+        // FEEL-03 (D-11): a purchase spend is a discrete ledger event —
+        // the scene fires the coalesced lane + gold flash here.
+        if (this.event_handler) {
+          this.event_handler(key, this.upgrades.Definitions[key].name, level);
+        }
+        return true;
+      }
+      this.on_shake(key);
+      return true;
     }
     return false;
   }
 
-  update_hover(x: number, y: number, width: number, height: number): void {
-    let new_hovered: number | null = null;
-    for (let i = 0; i < this.keys.length; i++) {
-      const card = this.card_position(i, width, height);
-      if (x >= card.x && x <= card.x + card.w && y >= card.y && y <= card.y + card.h) {
-        new_hovered = i;
-        break;
-      }
-    }
-    this.hovered_card = new_hovered;
+  update_hover(_x: number, _y: number, _width: number, _height: number): void {
+    // Modal chips need no hover lane; kept for the shared hover router.
   }
 
   update(dt: number): void {
@@ -169,25 +153,154 @@ export class UpgradePanel {
   on_purchase(key: string): void { this.purchase_animations[key] = 0.3; }
   on_shake(key: string): void { this.shake_animations[key] = { timer: 0.3 }; }
   on_sparkle(key: string): void { this.sparkle_animations[key] = 0.3; }
+
   draw(ctx: CanvasRenderingContext2D, state: GameState, width: number, height: number): void {
-    const { rail, fit } = this.geometry(width, height);
-    // Collapsed: the strip + chevron tab are painted by MainScene; cards
-    // in a 28px column would only smear, so skip them here.
-    if (this.collapsed) return;
-    // FEEL-02 (D-09): one target cue per frame, computed by the pure helpers
-    // in systems/upgrades.ts — the UI never re-derives cost/order math.
+    const p = this.geometry(width, height);
+
+    // Dim + panel: the shared modal language.
+    ctx.fillStyle = rgba(Config.OFFLINE_REPORT_DIM_COLOR);
+    ctx.fillRect(0, 0, width, height);
+    ctx.fillStyle = rgba(Config.OFFLINE_REPORT_PANEL_COLOR);
+    ctx.fillRect(p.panel.x, p.panel.y, p.panel.w, p.panel.h);
+    ctx.strokeStyle = rgba(Config.OFFLINE_REPORT_BORDER_COLOR);
+    ctx.lineWidth = 2;
+    ctx.strokeRect(p.panel.x, p.panel.y, p.panel.w, p.panel.h);
+    ctx.lineWidth = 1;
+
+    draw_text(ctx, "Skills", p.panel.x, p.panel.y + Config.LAYOUT_MARGIN,
+      Config.OFFLINE_REPORT_TITLE_COLOR, { align: "center", box: p.panel.w });
+
     const cue = this._target_cue(state);
-    for (let i = 0; i < this.keys.length; i++) {
-      const pos = this.card_position(i, width, height);
-      // Clip to the rail: overflow scrolls, it never bleeds onto the bar/HUD.
-      if (pos.y + pos.h > rail.y && pos.y < rail.y + rail.h) {
-        this._draw_card(ctx, this.keys[i], pos, state, cue);
-      }
+    const selected = this.selected_key();
+
+    // Connectors first so chips sit on top of the chain line.
+    ctx.strokeStyle = rgba([158, 158, 178, 255], 0.5);
+    ctx.lineWidth = 2;
+    for (let i = 1; i < p.chips.length; i++) {
+      const a = p.chips[i - 1];
+      const b = p.chips[i];
+      const mid_y = a.y + Math.floor(a.h / 2);
+      ctx.beginPath();
+      ctx.moveTo(a.x + a.w, mid_y);
+      ctx.lineTo(b.x, mid_y);
+      ctx.stroke();
     }
+    ctx.lineWidth = 1;
+
+    for (let i = 0; i < this.keys.length; i++) {
+      this._draw_chip(ctx, this.keys[i], p.chips[i], selected, cue);
+    }
+
+    this._draw_info(ctx, p, state, selected, cue);
+
+    draw_text(ctx, "tap outside to close", p.panel.x, p.panel.y + p.panel.h + 6,
+      Config.OFFLINE_REPORT_HINT_COLOR, { align: "center", box: p.panel.w });
   }
 
-  // FEEL-02: the single target cue — cheapest affordable track (glow) or,
-  // when none is affordable, the cheapest not-yet-maxed track to bank toward.
+  private _draw_chip(
+    ctx: CanvasRenderingContext2D,
+    key: string,
+    c: Rect,
+    selected: string,
+    cue: TargetCue | null,
+  ): void {
+    const def = this.upgrades.Definitions[key];
+    const level = this.upgrades.upgrades[key] || 0;
+    const maxed = this.upgrades.is_maxed(key);
+    const unlocked = this.upgrades.is_unlocked(key);
+
+    if (cue && cue.key === key && cue.kind === "afford") {
+      const glow = 0.25 + 0.15 * Math.sin(this.cue_pulse * 4);
+      ctx.fillStyle = rgba(def.color, glow);
+      ctx.fillRect(c.x - 2, c.y - 2, c.w + 4, c.h + 4);
+    }
+
+    if (!unlocked) {
+      ctx.fillStyle = rgba(Config.UPGRADE_DISABLED_COLOR, 0.5);
+    } else {
+      ctx.fillStyle = rgba(def.color, maxed ? 0.95 : 0.8);
+    }
+    ctx.fillRect(c.x, c.y, c.w, c.h);
+
+    if (key === selected) {
+      ctx.strokeStyle = rgba(Config.POP_COLOR_WHITE);
+      ctx.lineWidth = 2;
+      ctx.strokeRect(c.x, c.y, c.w, c.h);
+      ctx.lineWidth = 1;
+    }
+
+    const flash = this.purchase_animations[key];
+    if (flash && flash > 0) {
+      ctx.fillStyle = rgba(def.color, (flash / 0.3) * 0.5);
+      ctx.fillRect(c.x - 2, c.y - 2, c.w + 4, c.h + 4);
+    }
+
+    const icon_y = c.y + 6;
+    draw_text(ctx, def.icon, c.x, icon_y, Config.POP_COLOR_WHITE,
+      { size: Config.FONT_SIZE * 1.5, align: "center", box: c.w });
+    const lv_text = maxed ? "MAX" : `${Format.number(level)}`;
+    draw_text(ctx, lv_text, c.x, c.y + c.h - Config.FONT_SIZE - 6,
+      unlocked ? Config.POP_COLOR_WHITE : Config.OFFLINE_REPORT_HINT_COLOR,
+      { align: "center", box: c.w });
+  }
+
+  private _draw_info(
+    ctx: CanvasRenderingContext2D,
+    p: ReturnType<typeof Layout.skills_panel>,
+    state: GameState,
+    key: string,
+    cue: TargetCue | null,
+  ): void {
+    const def = this.upgrades.Definitions[key];
+    const level = this.upgrades.upgrades[key] || 0;
+    const maxed = this.upgrades.is_maxed(key);
+    const lh = Config.FONT_SIZE + 5;
+    let y = p.info_top;
+
+    draw_text(ctx, `${def.name}  Lv ${Format.number(level)}/${Format.number(def.max_level)}`,
+      p.chips[0].x, y, Config.POP_COLOR_WHITE);
+    y = y + lh + 4;
+
+    const locked = !maxed && !this.upgrades.is_unlocked(key);
+    if (locked) {
+      const gate = this.upgrades.locked_by(key);
+      draw_text(ctx, gate ? `Needs ${gate[0]} Lv${gate[1]}` : "Locked",
+        p.chips[0].x, y, Config.OFFLINE_REPORT_HINT_COLOR);
+    } else {
+      draw_text(ctx, maxed ? def.description(level) : def.description(level + 1),
+        p.chips[0].x, y, Config.POP_COLOR_WHITE);
+    }
+    y = p.buy.y - lh - 4;
+    if (cue && cue.key === key && cue.kind === "save" && cue.deficit !== undefined) {
+      draw_text(ctx, `Bank ${Format.number(cue.deficit)} more gold`,
+        p.chips[0].x, y, Config.OFFLINE_REPORT_HINT_COLOR);
+    }
+
+    // Buy button: one lane, same wording ladder as the old rail cards.
+    const b = p.buy;
+    const affordable = !maxed && !locked && this.upgrades.can_afford(key, state ?? ({} as GameState));
+    let btn_text: string;
+    if (maxed) {
+      btn_text = "MAX";
+    } else if (locked) {
+      const gate = this.upgrades.locked_by(key);
+      btn_text = gate ? `Needs ${gate[0]} Lv${gate[1]}` : "Locked";
+    } else if (!affordable) {
+      btn_text = "NOT ENOUGH";
+    } else {
+      btn_text = "BUY " + Format.number(this.upgrades.get_cost(key, level)) + "G";
+    }
+    ctx.strokeStyle = rgba(
+      maxed || locked || !affordable ? Config.UPGRADE_DISABLED_COLOR : Config.UPGRADE_BUY_BTN_COLOR,
+      0.7,
+    );
+    ctx.strokeRect(b.x, b.y, b.w, b.h);
+    draw_text(ctx, btn_text, b.x, b.y + 7, Config.POP_COLOR_WHITE,
+      { align: "center", box: b.w });
+  }
+
+  // FEEL-02: the single target cue — cheapest affordable live track (glow)
+  // or, when none is affordable, the cheapest live track to bank toward.
   _target_cue(state: GameState | null): TargetCue | null {
     const st = (state ?? {}) as GameState;
     const [key] = this.upgrades.next_affordable(st);
@@ -195,109 +308,6 @@ export class UpgradePanel {
     const toward = this.upgrades.save_toward(st);
     if (toward) return { key: toward.key, kind: "save", deficit: toward.deficit };
     return null;
-  }
-
-  private _draw_card(
-    ctx: CanvasRenderingContext2D,
-    key: string,
-    pos: Rect,
-    state: GameState | null,
-    cue: TargetCue | null,
-  ): void {
-    const def = this.upgrades.Definitions[key];
-    const level = this.upgrades.upgrades[key] || 0;
-    const maxed = this.upgrades.is_maxed(key);
-    const affordable = !maxed && this.upgrades.can_afford(key, (state ?? {}) as GameState);
-
-    // FEEL-02 afford-glow: pulsing 2px-expanded rect in the track color.
-    if (cue && cue.key === key && cue.kind === "afford") {
-      const glow = 0.25 + 0.15 * Math.sin(this.cue_pulse * 4);
-      ctx.fillStyle = rgba(def.color, glow);
-      ctx.fillRect(pos.x - 2, pos.y - 2, pos.w + 4, pos.h + 4);
-    }
-
-    // Card background; the save-toward card tints grey ("not yet", not "off").
-    if (cue && cue.key === key && cue.kind === "save") {
-      ctx.fillStyle = rgba(Config.UPGRADE_DISABLED_COLOR, 0.35);
-    } else {
-      ctx.fillStyle = rgba(Config.BG_COLOR, 0.15);
-    }
-    ctx.fillRect(pos.x, pos.y, pos.w, pos.h);
-
-    // Hover border only.
-    const index = this.keys.indexOf(key);
-    if (this.hovered_card === index) {
-      ctx.strokeStyle = rgba([158, 158, 178, 255]);
-      ctx.lineWidth = 2;
-      ctx.strokeRect(pos.x, pos.y, pos.w, pos.h);
-      ctx.lineWidth = 1;
-    }
-
-    // Purchase flash / sparkle overlays.
-    const flash = this.purchase_animations[key];
-    if (flash && flash > 0) {
-      ctx.fillStyle = rgba(def.color, (flash / 0.3) * 0.5);
-      ctx.fillRect(pos.x - 2, pos.y - 2, pos.w + 4, pos.h + 4);
-    }
-    const sparkle = this.sparkle_animations[key];
-    if (sparkle && sparkle > 0) {
-      ctx.fillStyle = rgba(def.color, (sparkle / 0.3) * 0.4);
-      ctx.fillRect(pos.x - 1, pos.y - 1, pos.w + 2, pos.h + 2);
-    }
-
-    // Icon (1.5x), name, level right-aligned. The headline track prints its
-    // name larger so the rail reads top-down like Clicker Heroes.
-    const hero = key === "click_multiplier";
-    draw_text(ctx, def.icon, pos.x + 8, pos.y + 8, def.color, { size: Config.FONT_SIZE * 1.5 });
-    draw_text(ctx, def.name, pos.x + 24, pos.y + 8, Config.POP_COLOR_WHITE,
-      { size: hero ? Config.FONT_SIZE * 1.25 : Config.FONT_SIZE });
-    draw_text(ctx, `Lv:${level}`, pos.x + pos.w - 60, pos.y + 8, [128, 128, 128, 255]);
-
-    // Cost text only on full-height cards; compact cards show it on the button.
-    if (pos.h >= 78) {
-      const cost_text = maxed
-        ? "MAX"
-        : "Cost: " + Format.number(this.upgrades.get_cost(key, level));
-      draw_text(ctx, cost_text, pos.x + pos.w - 60, pos.y + 22, [128, 128, 128, 255]);
-    }
-
-    // Effect description, kept clear of the buy button on compressed cards.
-    const effect_text = maxed ? def.description(level) : def.description(level + 1);
-    draw_text(ctx, effect_text, pos.x + 8, pos.y + pos.h - 44, [128, 128, 128, 255]);
-
-    const btn = this.buy_button_position(pos);
-    const save_deficit = cue && cue.key === key && cue.kind === "save" ? cue.deficit : undefined;
-    this._draw_buy_button(ctx, btn, key, level, maxed, affordable, save_deficit);
-  }
-
-  private _draw_buy_button(
-    ctx: CanvasRenderingContext2D,
-    btn: Rect,
-    key: string,
-    level: number,
-    maxed: boolean,
-    affordable: boolean,
-    save_deficit?: number,
-  ): void {
-    let btn_text: string;
-    if (maxed) {
-      btn_text = "MAX";
-    } else if (save_deficit !== undefined) {
-      btn_text = "need " + Format.number(save_deficit) + " gold";
-    } else if (!affordable) {
-      btn_text = "NOT ENOUGH";
-    } else {
-      btn_text = "BUY " + Format.number(this.upgrades.get_cost(key, level)) + "G";
-    }
-
-    if (maxed || !affordable) {
-      ctx.strokeStyle = rgba(Config.UPGRADE_DISABLED_COLOR, 0.6);
-    } else {
-      ctx.strokeStyle = rgba(Config.UPGRADE_BUY_BTN_COLOR, 0.7);
-    }
-    ctx.lineWidth = 1;
-    ctx.strokeRect(btn.x, btn.y, btn.w, btn.h);
-    draw_text(ctx, btn_text, btn.x + 4, btn.y + 7, Config.POP_COLOR_WHITE);
   }
 }
 

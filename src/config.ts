@@ -96,6 +96,41 @@ export const Config = {
   PRESTIGE_POINTS_PER_BADGE: 1,
   PRESTIGE_MULTIPLIER_PER_POINT: 0.01,
 
+  // Mastery-by-doing (PS99 mastery shape): every tracked lifetime stat climbs
+  // its own threshold ladder just by the thing being done; each level adds a
+  // small gold multiplier. Like prestige points, levels are DERIVED from the
+  // stats map, never stored.
+  MASTERY_TRACKS: [
+    "clicks",
+    "kills",
+    "crits",
+    "pulls_total",
+    "upgrades_bought",
+    "unique_hires",
+  ] as string[],
+  MASTERY_THRESHOLDS: [50, 250, 1000, 5000],
+  MASTERY_GOLD_PER_LEVEL: 0.01,
+
+  // Luck (PS99 luck stack): named buffs unlocked by REBIRTH COUNT multiply
+  // the pull probability before the pity ladder; rolls stay independent.
+  // Mastery levels keep a smaller additive share so early non-rebirth play
+  // still counts. Together the full ladder lands near PS99's ~5x example.
+  LUCK_BUFFS: [
+    { name: "Career Coach", rebirths: 1, mult: 1.25 },
+    { name: "Overtime Contract", rebirths: 2, mult: 1.5 },
+    { name: "Executive Suite", rebirths: 3, mult: 2 },
+  ] as LuckBuff[],
+  LUCK_PER_MASTERY_LEVEL: 0.02,
+
+  // Equip-lane decay (PS99 enchant curve): same-type bonuses on the assigned
+  // lane weight 100% / 60% / 38% by size, so team breadth beats stacking one
+  // type. Past the curve the last weight repeats.
+  BONUS_SLOT_DECAY: [1, 0.6, 0.38],
+
+  // Duplicate fusion floor: copies of one name needed to fuse a stronger
+  // single instance one rarity step up.
+  FUSE_MIN_COPIES: 2,
+
   // Prestige panel (design MAXIMA the layout clamps against the live window).
   PRESTIGE_BTN_WIDTH: 84,
   PRESTIGE_PANEL_WIDTH: 380,
@@ -161,9 +196,17 @@ export const Config = {
   // Upgrade system. Each definition in upgrades.ts hardcodes its own
   // maxLevel — this constant is the doc value for the active rails.
   UPGRADE_MAX_LEVEL: 100,
+  // Pets-Go-style lattice: a track unlocks when its parent (PREREQS in
+  // upgrades.ts) reaches this level, capped by the parent's own max.
+  UPGRADE_PREREQ_LEVEL: 2,
   UPGRADE_CARD_HEIGHT: 80,
   UPGRADE_CARD_GAP: 8,
   UPGRADE_BUY_BTN_HEIGHT: 28,
+  // Skills modal (upgrade lattice): centered panel, chip-row maxima.
+  SKILLS_PANEL_WIDTH: 460,
+  SKILLS_PANEL_HEIGHT: 300,
+  SKILLS_CHIP_HEIGHT: 46,
+  SKILLS_CHIP_GAP: 14,
   UPGRADE_BUY_BTN_COLOR: [240, 200, 80, 255],
   UPGRADE_DISABLED_COLOR: [108, 108, 128, 255],
 
@@ -583,6 +626,12 @@ export interface AreaDef {
   bg: readonly number[];
   monster: string;
   pool: readonly string[];
+}
+
+export interface LuckBuff {
+  name: string;
+  rebirths: number;
+  mult: number;
 }
 
 export interface AchievementDef {

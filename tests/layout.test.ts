@@ -34,7 +34,8 @@ describe("Layout zones", () => {
     expect(80).toEqual(z.content_top);
     expect(604).toEqual(z.rail_r.x);
     expect(Config.LAYOUT_MARGIN).toEqual(z.rail_l.x);
-    expect(800 - 2 * (Config.LAYOUT_MARGIN + Config.ROSTER_PANEL_WIDTH)).toEqual(z.stage.w);
+    // Left rail retired: the stage only loses the roster rail's width now.
+    expect(800 - Config.LAYOUT_MARGIN * 2 - Config.ROSTER_PANEL_WIDTH).toEqual(z.stage.w);
     expect(Config.ROSTER_PANEL_WIDTH).toEqual(z.rail_r.w);
     expect(z.bar.y - 80).toEqual(z.rail_r.h);
     expect(z.rail_l.x + z.rail_l.w).toEqual(z.stage.x);
@@ -446,12 +447,14 @@ describe("Layout collapsible rails", () => {
   it("collapsed rails use the strip width and the stage absorbs the freed space", () => {
     const open = Layout.zones(800, 600);
     const lc = Layout.zones(800, 600, { left: true });
-    expect(Config.COLLAPSED_RAIL_WIDTH).toEqual(lc.rail_l.w);
-    expect(open.rail_r.x).toEqual(open.rail_r.x); // right rail untouched by left collapse
-    expect(lc.stage.w > open.stage.w).toBe(true); // stage grew
+    expect(0).toEqual(lc.rail_l.w); // retired left rail: zero-width seam
+    expect(lc.stage.w).toEqual(open.stage.w); // the left flag no longer steers geometry
     expect(lc.stage.x).toEqual(lc.rail_l.x + lc.rail_l.w);
+    const rc = Layout.zones(800, 600, { right: true });
+    expect(Config.COLLAPSED_RAIL_WIDTH).toEqual(rc.rail_r.w);
+    expect(rc.stage.w > open.stage.w).toBe(true); // stage absorbs the freed strip
     const both = Layout.zones(800, 600, { left: true, right: true });
-    expect(both.stage.w > lc.stage.w).toBe(true);
+    expect(both.stage.w).toEqual(rc.stage.w);
   });
 
   it("every collapse combo keeps rails, stage and bar contained and ordered", () => {
@@ -471,20 +474,17 @@ describe("Layout collapsible rails", () => {
 
   it("rail_tab sits in the rail's top-inner corner at the config size", () => {
     const z = Layout.zones(800, 600);
-    const lt = Layout.rail_tab(z.rail_l, "left");
     const rt = Layout.rail_tab(z.rail_r, "right");
-    expect(Config.RAIL_TAB_SIZE).toEqual(lt.w);
-    expect(Config.RAIL_TAB_SIZE).toEqual(lt.h);
-    expect(lt.x + lt.w).toEqual(z.rail_l.x + z.rail_l.w); // left tab hugs inner edge
+    expect(Config.RAIL_TAB_SIZE).toEqual(rt.w);
+    expect(Config.RAIL_TAB_SIZE).toEqual(rt.h);
     expect(rt.x).toEqual(z.rail_r.x); // right tab hugs inner edge
-    expect(lt.y).toEqual(z.rail_l.y);
-    expect(within(lt, 800, 600)).toBe(true);
+    expect(rt.y).toEqual(z.rail_r.y);
     expect(within(rt, 800, 600)).toBe(true);
     // a collapsed rail keeps its tab inside the strip
-    const lc = Layout.zones(800, 600, { left: true });
-    const lct = Layout.rail_tab(lc.rail_l, "left");
-    expect(lct.x >= lc.rail_l.x).toBe(true);
-    expect(lct.x + lct.w <= lc.rail_l.x + lc.rail_l.w + 0.001).toBe(true);
+    const rc = Layout.zones(800, 600, { right: true });
+    const rct = Layout.rail_tab(rc.rail_r, "right");
+    expect(rct.x >= rc.rail_r.x).toBe(true);
+    expect(rct.x + rct.w <= rc.rail_r.x + rc.rail_r.w + 0.001).toBe(true);
   });
 });
 
@@ -556,7 +556,7 @@ describe("Phase 15 phone-aspect sweep", () => {
     const ww = Config.LAYOUT_MIN_WIDTH;
     const wh = Config.LAYOUT_MIN_HEIGHT;
     const z = Layout.zones(ww, wh);
-    expect(Config.LAYOUT_RAIL_MIN_WIDTH).toEqual(z.rail_l.w);
+    expect(0).toEqual(z.rail_l.w); // retired left rail: zero-width seam
     expect(Config.LAYOUT_RAIL_MIN_WIDTH).toEqual(z.rail_r.w);
     expect(within(z.hud, ww, wh)).toBe(true);
     expect(within(z.bar, ww, wh)).toBe(true);

@@ -199,7 +199,8 @@ describe("Upgrade System", () => {
   it("set_state restores upgrade levels correctly", () => {
     const upgrades = new Upgrades();
     upgrades.purchase("click_multiplier", st(99999));
-    upgrades.purchase("idle_rate", st(99999));
+    upgrades.upgrades.unlock_passive = 1;
+    upgrades.purchase("idle_rate", st(99999)); // lattice: parent unlocked at Lv1
     const saved = upgrades.get_state();
     for (const key of Object.keys(upgrades.Definitions)) {
       upgrades.upgrades[key] = 0;
@@ -292,6 +293,7 @@ describe("Upgrade System", () => {
 
   it("purchasing unlock_passive sets state.passive_unlocked to true", () => {
     const upgrades = new Upgrades();
+    upgrades.upgrades.click_multiplier = 2; // lattice parent gate
     const state = st(100, { passive_unlocked: false });
     upgrades.purchase("unlock_passive", state);
     expect(state.passive_unlocked).toBe(true);
@@ -300,6 +302,7 @@ describe("Upgrade System", () => {
 
   it("unlock_passive cannot be purchased past level 1", () => {
     const upgrades = new Upgrades();
+    upgrades.upgrades.click_multiplier = 2; // lattice parent gate
     upgrades.purchase("unlock_passive", st(99999));
     expect(() => upgrades.purchase("unlock_passive", st(99999))).toThrow();
   });
@@ -414,6 +417,7 @@ describe("Upgrades lifetime stats recording (STATS-02)", () => {
 
   it("a maxed purchase errors and records nothing extra", () => {
     const upgrades = new Upgrades();
+    upgrades.upgrades.click_multiplier = 2; // lattice parent gate
     const state = st(999999, { stats: {} });
     upgrades.purchase("unlock_passive", state);
     expect(state.stats.upgrades_bought).toBe(1);
@@ -438,10 +442,50 @@ describe("Upgrades lifetime stats recording (STATS-02)", () => {
 
 
 describe("UpgradePanel reading order", () => {
-  it("leads with click_multiplier, the rest follow alphabetically", () => {
+  it("reads as the skill chain: PRIORITY order, click_multiplier first", () => {
     const panel = new UpgradePanel(new Upgrades());
-    const keys = panel.card_keys();
-    expect(keys[0]).toBe("click_multiplier");
-    expect(keys.slice(1)).toEqual([...keys.slice(1)].sort());
+    expect(panel.card_keys()).toEqual([
+      "click_multiplier",
+      "unlock_passive",
+      "idle_rate",
+      "gold_multiplier",
+      "exp_multiplier",
+      "crit_chance",
+    ]);
+  });
+
+  describe("Lattice gating", () => {
+    it("only the root is live on a fresh board", () => {
+      const upgrades = new Upgrades();
+      expect(upgrades.is_unlocked("click_multiplier")).toBe(true);
+      expect(upgrades.is_unlocked("unlock_passive")).toBe(false);
+      expect(upgrades.locked_by("unlock_passive")).toEqual(["Click Multiplier", 2]);
+    });
+
+    it("a child lights up when its parent reaches the gate level", () => {
+      const upgrades = new Upgrades();
+      upgrades.upgrades.click_multiplier = 2;
+      expect(upgrades.is_unlocked("unlock_passive")).toBe(true);
+      // one level deep: Idle Generation maxes at 1, so Lv1 gates Idle Rate
+      upgrades.upgrades.unlock_passive = 1;
+      expect(upgrades.is_unlocked("idle_rate")).toBe(true);
+      expect(upgrades.is_unlocked("gold_multiplier")).toBe(false);
+    });
+
+    it("purchase refuses a locked node and records nothing", () => {
+      const upgrades = new Upgrades();
+      const state = st(999999, { stats: {} });
+      expect(() => upgrades.purchase("idle_rate", state)).toThrow("Upgrade locked: idle_rate");
+      expect(state.stats.upgrades_bought).toBeUndefined();
+      expect(state.gold).toBe(999999);
+    });
+
+    it("next_affordable walks only live nodes", () => {
+      const upgrades = new Upgrades();
+      upgrades.upgrades.click_multiplier = 100; // maxed root
+      // unlock_passive is live (parent maxed >= 2); everything deeper waits.
+      const [key] = upgrades.next_affordable(st(1000));
+      expect(key).toBe("unlock_passive");
+    });
   });
 });

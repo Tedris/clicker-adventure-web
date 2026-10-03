@@ -7,6 +7,7 @@ import Config from "../config";
 import Format from "../format";
 import { createSpriteCanvas } from "../pixelart";
 import Areas from "./areas";
+import Mastery from "./mastery";
 import type { GameState } from "../state";
 import Prestige from "./prestige";
 import Stats from "./stats";
@@ -274,7 +275,8 @@ export class Clicker {
     // The areas ladder adds its own cleared-area gold multiplier on top.
     const prestige_mult = Prestige.gold_multiplier(state);
     const area_mult = Areas.gold_multiplier(state);
-    const gold_earned = base_gold * multiplier * prestige_mult * area_mult;
+    const mastery_mult = Mastery.gold_multiplier(state);
+    const gold_earned = base_gold * multiplier * prestige_mult * area_mult * mastery_mult;
     const exp_earned = base_exp * exp_mult * multiplier;
 
     // `|| 0` guards and the max(0, ...) clamp normalize nil/negative

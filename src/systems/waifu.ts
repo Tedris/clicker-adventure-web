@@ -269,6 +269,18 @@ const WAIFU_PERIODIC_POOL: Record<string, readonly string[]> = {
   "Bob the Intern": BOB_PERIODIC_LINES,
 };
 
+// PS99 enchant decay: same-type bonuses weigh Config.BONUS_SLOT_DECAY in
+// descending order of size; past the configured curve the last weight repeats.
+function decayed_sum(values: number[]): number {
+  const sorted = [...values].sort((a, b) => b - a);
+  const curve = Config.BONUS_SLOT_DECAY;
+  let total = 0;
+  for (let i = 0; i < sorted.length; i++) {
+    total += sorted[i] * curve[Math.min(i, curve.length - 1)];
+  }
+  return Math.round(total * 1000) / 1000;
+}
+
 export class Waifu {
   animation_timer = 0;
   animation_state = "idle";
@@ -371,20 +383,68 @@ export class Waifu {
   }
 
   // Consumed by other modules as a [tokenMult, goldMult, expMult] tuple:
-  // the bonuses of the ASSIGNED hires summed per bonus_type, missing
+  // the bonuses of the ASSIGNED hires summed per bonus_type with the PS99
+  // enchant decay curve — biggest copy full strength, next copies weigh
+  // 60% / 38% — so a mixed trio beats three of one type. Missing
   // bonus_value guarded to 0.
   get_bonus_multiplier(
     state: Pick<GameState, "waifus" | "assignments" | "area_index">,
   ): [number, number, number] {
-    let token_mult = 0;
-    let gold_mult = 0;
-    let exp_mult = 0;
+    const by_type: Record<string, number[]> = { tokens: [], gold: [], exp: [] };
     for (const w of this.effective_assigned(state)) {
-      if (w.bonus_type === "tokens") token_mult += w.bonus_value ?? 0;
-      else if (w.bonus_type === "gold") gold_mult += w.bonus_value ?? 0;
-      else if (w.bonus_type === "exp") exp_mult += w.bonus_value ?? 0;
+      const lane = by_type[w.bonus_type];
+      if (lane) lane.push(w.bonus_value ?? 0);
     }
-    return [token_mult, gold_mult, exp_mult];
+    return [
+      decayed_sum(by_type.tokens),
+      decayed_sum(by_type.gold),
+      decayed_sum(by_type.exp),
+    ];
+  }
+
+  // Duplicate fusion (PS99 fused-pet tier): same-name copies roll into ONE
+  // instance one rarity ladder step up. The best copy's bonus is the base,
+  // rescaled by the tier ratio of the new rarity; legendary copies just keep
+  // the highest bonus. Needs FUSE_MIN_COPIES copies; returns null otherwise.
+  fuse(
+    state: Pick<GameState, "waifus">,
+    name: string,
+  ): WaifuInstance | null {
+    const roster = state.waifus ?? [];
+    const copies = roster.filter((w) => w && w.name === name);
+    if (copies.length < Config.FUSE_MIN_COPIES) return null;
+    const best = copies.reduce((a, b) =>
+      (b.bonus_value ?? 0) > (a.bonus_value ?? 0) ? b : a,
+    );
+    const ladder = Config.WAIFU_RARITIES;
+    const at = ladder.findIndex((r) => r.key === best.rarity);
+    const next = ladder[Math.min(at + 1, ladder.length - 1)] ?? ladder[0];
+    const cur = Config.WAIFU_RARITY_BY_KEY[best.rarity];
+    const ratio = cur && cur.bonus_mult ? next.bonus_mult / cur.bonus_mult : 1;
+    const scaled = (best.bonus_value ?? 0) * ratio;
+    const fused: WaifuInstance = {
+      name: best.name,
+      bonus_type: best.bonus_type,
+      bonus_value: Math.floor(scaled * 1000 + 0.5) / 1000,
+      rarity: next.key,
+    };
+    // Collapse every copy into the fused instance at the FIRST copy's slot
+    // so the roster order (and the roster grid) stays stable.
+    const kept: WaifuInstance[] = [];
+    let inserted = false;
+    for (const w of roster) {
+      if (w && w.name === name) {
+        if (!inserted) {
+          kept.push(fused);
+          inserted = true;
+        }
+        continue;
+      }
+      kept.push(w);
+    }
+    if (!inserted) kept.push(fused);
+    state.waifus = kept;
+    return fused;
   }
 
   get_first_pull_line(): string | null {

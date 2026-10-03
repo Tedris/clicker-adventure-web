@@ -12,6 +12,7 @@ import { createSpriteCanvas } from "../pixelart";
 import type { GameState, WaifuInstance } from "../state";
 import type { WaifuPersonality } from "../config";
 import type { Gacha, PullResult } from "../systems/gacha";
+import Mastery from "../systems/mastery";
 import type { Waifu } from "../systems/waifu";
 
 const STATE_WAITING = "waiting";
@@ -373,7 +374,9 @@ export class PullScreen {
     // nothing to click. Text mirrors the main-scene pull-fail toast.
     if (this.revealed && !this.pulled_waifu) {
       const iw = Math.min(320, width - 2 * Config.LAYOUT_MARGIN);
-      this._center_text(ctx, `No summon... Pity: ${this.state.pity_counter ?? 0}/${Config.PITY_HARD}`,
+      const luck = Mastery.luck_multiplier(this.state);
+      const luck_note = luck > 1 ? ` Luck ${luck.toFixed(2)}x` : "";
+      this._center_text(ctx, `No summon... Pity: ${this.state.pity_counter ?? 0}/${Config.PITY_HARD}${luck_note}`,
         cx - iw / 2, cy - 8, iw);
       const can_again = (this.state.tokens ?? 0) >= Config.PULL_COST;
       this._draw_button(ctx, "Pull Again" + (can_again ? "" : ` (${Config.PULL_COST}T)`), g.pull_again, can_again);

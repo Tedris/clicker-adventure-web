@@ -3,6 +3,7 @@
 // Pure, testable, and the single offline code path.
 
 import Config from "../config";
+import Mastery from "./mastery";
 import Prestige from "./prestige";
 import type { GameState } from "../state";
 import type { UpgradesLike } from "./passive";
@@ -80,7 +81,7 @@ export class Offline {
     // D-02 (PREST-01): prestige multiplier amplifies gold ONLY.
     const offline_gold =
       capped * Config.PASSIVE_GOLD_RATE * idle_mult * (1 + gold_mult) *
-      Prestige.gold_multiplier(state);
+      Prestige.gold_multiplier(state) * Mastery.gold_multiplier(state);
     const offline_exp = capped * Config.PASSIVE_EXP_RATE * idle_mult * (1 + exp_mult);
 
     state.tokens = (state.tokens ?? 0) + offline_tokens;

@@ -44,7 +44,10 @@ export function zones(ww: number, wh: number, collapsed?: CollapseOpts) {
   const bar_h = Config.BOTTOM_BAR_HEIGHT;
   const content_top = margin + hud_h + margin;
   const rail_h = Math.max(0, (wh - bar_h) - content_top);
-  const rw_l = side_rail_width(ww, collapsed?.left);
+  // The left rail is retired: skills live in their own modal, so the whole
+  // content width minus the roster rail is stage. `left` stays accepted in
+  // CollapseOpts for call-site compatibility but no longer steers geometry.
+  const rw_l = 0;
   const rw_r = side_rail_width(ww, collapsed?.right);
   return {
     margin,
@@ -105,6 +108,10 @@ export function bar_items(ww: number, wh: number, collapsed?: CollapseOpts) {
   // toggle buttons.
   const areas_w = Math.max(48, Math.min(88, Math.floor(z.hud.w * 0.18)));
   const areas_h = Config.TOGGLE_BTN_HEIGHT;
+  const areas_x = z.hud.x + z.hud.w - areas_w - 8;
+  // Skills button: left of Areas, same size language — the entry into the
+  // upgrade lattice modal.
+  const skills_x = areas_x - 8 - areas_w;
   return {
     bar,
     pull: { x: Config.PULL_BTN_X, y: bar.y, w: pull_w, h: bar.h },
@@ -115,7 +122,13 @@ export function bar_items(ww: number, wh: number, collapsed?: CollapseOpts) {
     sess: { x: sess_x, y: sess_y, w: sess_w, h: sess_h },
     dbg: { x: dbg_x, y: sess_y, w: sess_w, h: sess_h },
     areas: {
-      x: z.hud.x + z.hud.w - areas_w - 8,
+      x: areas_x,
+      y: z.hud.y + Math.floor((z.hud.h - areas_h) / 2),
+      w: areas_w,
+      h: areas_h,
+    },
+    skills: {
+      x: skills_x,
       y: z.hud.y + Math.floor((z.hud.h - areas_h) / 2),
       w: areas_w,
       h: areas_h,
@@ -386,6 +399,41 @@ export function pickup_spots(ww: number, wh: number, collapsed?: CollapseOpts) {
   };
 }
 
+// Skills modal geometry: centered panel holding the upgrade lattice as a
+// horizontal chip row (one chip per track, connectors in the gutters), an
+// info block for the selected track, and one buy button on the base line.
+// Chips are returned as ready rects so draw and hit-test share one row; the
+// row shrinks chip widths honestly at narrow windows (never wraps).
+export function skills_panel(ww: number, wh: number, count: number) {
+  const pad = Config.LAYOUT_MARGIN;
+  const pw = Math.min(Config.SKILLS_PANEL_WIDTH, ww - pad * 2);
+  const ph = Math.min(Config.SKILLS_PANEL_HEIGHT, wh - pad * 2);
+  const px = Math.floor((ww - pw) / 2);
+  const py = Math.floor((wh - ph) / 2);
+  const n = Math.max(1, count | 0);
+  const gap = Config.SKILLS_CHIP_GAP;
+  const chip_w = Math.max(36, Math.floor((pw - pad * 2 - gap * (n - 1)) / n));
+  const chip_h = Config.SKILLS_CHIP_HEIGHT;
+  const chips_y = py + pad + Config.FONT_SIZE + 10;
+  const chips: Rect[] = [];
+  for (let i = 0; i < n; i++) {
+    chips.push({ x: px + pad + i * (chip_w + gap), y: chips_y, w: chip_w, h: chip_h });
+  }
+  const bh = Config.UPGRADE_BUY_BTN_HEIGHT;
+  const info_top = chips_y + chip_h + 12;
+  const buy = {
+    x: px + pad, y: py + ph - pad - Config.FONT_SIZE - 10 - bh,
+    w: pw - pad * 2, h: bh,
+  };
+  return {
+    panel: { x: px, y: py, w: pw, h: ph },
+    chips,
+    info_top,
+    info_w: pw - pad * 2,
+    buy,
+  };
+}
+
 const Layout = {
   rail_width,
   rail_tab,
@@ -403,6 +451,7 @@ const Layout = {
   pull_geometry,
   waifu_detail,
   area_menu,
+  skills_panel,
 };
 
 export default Layout;

@@ -409,6 +409,27 @@ describe("Gacha lifetime stats recording (STATS-03)", () => {
   });
 });
 
+describe("Luck stack on the drop roll", () => {
+  it("rebirth luck lifts a roll that would miss at the base rate", () => {
+    // 9 rebirths unlock all three buffs: luck = 1.25 * 1.5 * 2 = 3.75 ->
+    // effective rate 0.05 * 3.75 = 0.1875. A 0.09 drop roll fails the bare
+    // 5% but succeeds with the rebirth buff stack.
+    const state = st({
+      tokens: 1000, pity_counter: 0, waifus: [], stats: {}, prestige_rebirths: 9,
+    });
+    const result = new Gacha(stubRandom(0.09, 1, 0.5)).pull(state)!;
+    expect(result.success).toBe(true);
+    expect(state.pity_counter).toBe(0);
+  });
+
+  it("a bare state keeps the base rate (a near-miss roll still fails)", () => {
+    const state = st({ tokens: 1000, pity_counter: 0, waifus: [], stats: {} });
+    const result = new Gacha(stubRandom(0.09, 1, 0.5)).pull(state)!;
+    expect(result.success).toBe(false);
+    expect(state.pity_counter).toBe(1);
+  });
+});
+
 describe("hire_from_pool (chest hires)", () => {
   function hireRng(poolIdx: number, rarityRoll: number): RandomFn {
     const values = [poolIdx, rarityRoll];

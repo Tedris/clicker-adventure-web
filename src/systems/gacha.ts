@@ -3,6 +3,7 @@
 
 import Config, { type Rarity } from "../config";
 import type { GameState, WaifuInstance } from "../state";
+import Mastery from "./mastery";
 
 // RNG seam mirroring Lua's math.random: no-arg call -> float in [0,1);
 // call with max -> integer in 1..max. Tests inject positional stubs so a
@@ -49,7 +50,13 @@ export class Gacha {
       return null;
     }
     state.tokens = state.tokens - Config.PULL_COST;
-    const probability = this.get_probability(state.pity_counter ?? 0);
+    // PS99 luck stack: earn-only buffs (rebirth tiers + mastery levels) bump
+    // the drop probability before the pity ladder. Rolls stay independent —
+    // luck raises the odds, it never makes a roll "due".
+    const probability = Math.min(
+      1,
+      this.get_probability(state.pity_counter ?? 0) * Mastery.luck_multiplier(state),
+    );
     if (this.random() < probability) {
       state.pity_counter = 0;
       const def = this.get_random_waifu(state.area_index ?? 0);

@@ -4,6 +4,7 @@
 import Config from "../config";
 import type { GameState } from "../state";
 import Areas from "./areas";
+import Mastery from "./mastery";
 import Prestige from "./prestige";
 
 export interface UpgradesLike {
@@ -82,8 +83,9 @@ export class Passive {
     // The areas ladder adds its cleared-area gold multiplier on top.
     const prestige_mult = Prestige.gold_multiplier(state);
     const area_mult = Areas.gold_multiplier(state);
+    const mastery_mult = Mastery.gold_multiplier(state);
     const tokens_earned = this.base_token_rate * (1 + token_mult);
-    const gold_earned = this.base_gold_rate * idle_mult * (1 + gold_mult) * prestige_mult * area_mult;
+    const gold_earned = this.base_gold_rate * idle_mult * (1 + gold_mult) * prestige_mult * area_mult * mastery_mult;
     const exp_earned = this.base_exp_rate * idle_mult * (1 + exp_mult);
 
     state.gold = (state.gold ?? 0) + gold_earned;

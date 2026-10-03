@@ -98,7 +98,8 @@ describe("MainScene.mousepressed", () => {
     const state = createState();
     const scene = make_scene(state);
     scene.load(state);
-    const hit = scene.mousepressed(Config.WINDOW_WIDTH / 2, Config.WINDOW_HEIGHT / 2);
+    const stage = Layout.zones(Config.WINDOW_WIDTH, Config.WINDOW_HEIGHT).stage;
+    const hit = scene.mousepressed(stage.x + stage.w / 2, stage.y + stage.h / 2);
     expect(hit).toBe(true);
     expect(state.gold).toBeGreaterThan(0);
   });
@@ -201,23 +202,70 @@ describe("MainScene toasts, modals and input lanes", () => {
   });
 });
 
+describe("Skills modal", () => {
+  function open_skills(scene: MainScene): void {
+    const b = Layout.bar_items(Config.WINDOW_WIDTH, Config.WINDOW_HEIGHT);
+    scene.mousepressed(b.skills.x + b.skills.w / 2, b.skills.y + b.skills.h / 2);
+  }
+
+  it("the Skills button opens the lattice and an outside click closes it", () => {
+    const scene = make_scene(createState());
+    scene.load(createState());
+    open_skills(scene);
+    expect(scene.skills_panel_open).toBe(true);
+    scene.mousepressed(Config.LAYOUT_MARGIN + 2, Config.LAYOUT_MARGIN + 2);
+    expect(scene.skills_panel_open).toBe(false);
+  });
+
+  it("the buy button purchases the selected track and keeps the modal open", () => {
+    const state = createState();
+    state.gold = 100;
+    const scene = make_scene(state);
+    scene.load(state);
+    open_skills(scene);
+    const p = Layout.skills_panel(Config.WINDOW_WIDTH, Config.WINDOW_HEIGHT, 6);
+    scene.mousepressed(p.buy.x + p.buy.w / 2, p.buy.y + p.buy.h / 2);
+    expect(scene.upgrades!.upgrades.click_multiplier).toBe(1);
+    expect(state.gold).toBe(90);
+    expect(scene.event_toast_message).toContain("Click Multiplier");
+    expect(scene.skills_panel_open).toBe(true);
+  });
+
+  it("a chip selects its track once the chain gate opens", () => {
+    const state = createState();
+    state.gold = 500;
+    const scene = make_scene(state);
+    scene.load(state);
+    open_skills(scene);
+    const p = Layout.skills_panel(Config.WINDOW_WIDTH, Config.WINDOW_HEIGHT, 6);
+    // Two Click Multiplier buys (10 + 25) lift the Lv2 gate for the next chip.
+    scene.mousepressed(p.buy.x + p.buy.w / 2, p.buy.y + p.buy.h / 2);
+    scene.mousepressed(p.buy.x + p.buy.w / 2, p.buy.y + p.buy.h / 2);
+    expect(scene.upgrades!.upgrades.click_multiplier).toBe(2);
+    scene.mousepressed(p.chips[1].x + p.chips[1].w / 2, p.chips[1].y + p.chips[1].h / 2);
+    expect(scene.upgrade_ui!.selected_key()).toBe("unlock_passive");
+    scene.mousepressed(p.buy.x + p.buy.w / 2, p.buy.y + p.buy.h / 2);
+    expect(scene.upgrades!.upgrades.unlock_passive).toBe(1);
+    expect(state.passive_unlocked).toBe(true);
+  });
+});
+
 describe("MainScene rail collapse tabs", () => {
-  function tab_center(side: "left" | "right", collapsed: { left?: boolean; right?: boolean }): [number, number] {
+  function tab_center(collapsed: { right?: boolean }): [number, number] {
     const z = Layout.zones(Config.WINDOW_WIDTH, Config.WINDOW_HEIGHT, collapsed);
-    const t = Layout.rail_tab(side === "left" ? z.rail_l : z.rail_r, side);
+    const t = Layout.rail_tab(z.rail_r, "right");
     return [t.x + t.w / 2, t.y + t.h / 2];
   }
 
   it("a chevron tap collapses its rail and a second tap expands it", () => {
     const scene = make_scene(createState());
     scene.load(createState());
-    let [x, y] = tab_center("left", {});
+    let [x, y] = tab_center({});
     scene.mousepressed(x, y);
-    expect(scene.left_collapsed).toBe(true);
+    expect(scene.right_collapsed).toBe(true);
+    [x, y] = tab_center({ right: true });
+    scene.mousepressed(x, y);
     expect(scene.right_collapsed).toBe(false);
-    [x, y] = tab_center("left", { left: true });
-    scene.mousepressed(x, y);
-    expect(scene.left_collapsed).toBe(false);
   });
 
   it("while collapsed, any tap on the strip expands the rail", () => {
