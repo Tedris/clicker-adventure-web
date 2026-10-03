@@ -438,6 +438,16 @@ export function skills_panel(ww: number, wh: number, count: number) {
   };
 }
 
+// Head offsets around the stage center for a monster pack: symmetric around
+// 0 so the middle head sits on the old single-monster spot. Clicker.draw and
+// the MainScene hit-test share this so visuals and clicks never disagree.
+export function party_offsets(count: number, spacing: number): number[] {
+  const n = Math.max(1, count | 0);
+  const offs: number[] = [];
+  for (let i = 0; i < n; i++) offs.push(Math.round((i - (n - 1) / 2) * spacing));
+  return offs;
+}
+
 const Layout = {
   rail_width,
   rail_tab,
@@ -449,6 +459,7 @@ const Layout = {
   stats_rect,
   meter_rect,
   pickup_spots,
+  party_offsets,
   fit_rail,
   roster_grid,
   roster_slot,

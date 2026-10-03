@@ -6,6 +6,7 @@
 import Config from "../config";
 import Format from "../format";
 import { createSpriteCanvas } from "../pixelart";
+import Layout from "../ui/layout";
 import Areas from "./areas";
 import Mastery from "./mastery";
 import type { GameState } from "../state";
@@ -144,8 +145,10 @@ export class Clicker {
   monster_state = "alive"; // alive, dead, respawning
   // Multi-hit monster HP (PS99 pace): clicks chip this down and the kill
   // lands on the death transition. max_hp mirrors the area's monster line.
+  // The HP is SHARED across the area's monster pack (one party, one pool).
   hp = 1;
   max_hp = 1;
+  party_count = Config.MONSTER_PARTY_FALLBACK;
   anim_timer = 0;
   idle_offset = 0;
   humor_line = "";
@@ -196,15 +199,18 @@ export class Clicker {
     const idx = Math.floor(Math.random() * available.length);
     this.current_monster = available[idx];
 
-    // PS99 flavor: each area favors its own monster species. The exp-gated
-    // pool still decides what is available; the area tint + name carry the
-    // rest of the identity when a species has not unlocked yet.
+    // PS99 flavor: each area favors its own monster species AND its own
+    // pack size (more heads in later areas). The exp-gated pool still
+    // decides what is available; the area tint + name carry the rest of the
+    // identity when a species has not unlocked yet.
+    const area_def = Areas.def(state ? state.area_index ?? 0 : 0);
     if (state) {
-      const keyed = Areas.def(state.area_index ?? 0).monster;
+      const keyed = area_def.monster;
       if (available.some((m) => m.sprite_key === keyed)) {
         this.current_monster = available.find((m) => m.sprite_key === keyed) ?? this.current_monster;
       }
     }
+    this.party_count = area_def.party ?? Config.MONSTER_PARTY_FALLBACK;
 
     // Fresh HP from the area ladder; the boss line doubles when the meter
     // is already full so the milestone reads as a beefier target.
@@ -697,42 +703,47 @@ export class Clicker {
     const scale_x = 1.0 - this.compression_amount;
     const scale_y = 1.0 + this.compression_amount * 0.5;
 
-    // Monster: pixel-art sprite scaled to MONSTER_SIZE with the fade alpha
-    // (mirrors PixelArt.get_image in clicker.lua); falls back to the legacy
-    // colored rectangle when there is no DOM canvas (pure-data test runs).
+    // Monster pack: pixel-art sprites scaled to MONSTER_SIZE with the fade
+    // alpha (mirrors PixelArt.get_image in clicker.lua), one head per party
+    // slot spread around the stage center; falls back to legacy colored
+    // rectangles when there is no DOM canvas (pure-data test runs).
+    const offs = Layout.party_offsets(this.party_count, Config.MONSTER_SIZE * 2);
     const sprite = this.current_monster
       ? createSpriteCanvas(
           this.current_monster.sprite_key,
           Math.round(Config.MONSTER_SIZE / Config.SPRITE_PIXEL_SIZE),
         )
       : undefined;
-    if (sprite && ctx.drawImage) {
-      ctx.imageSmoothingEnabled = false;
-      ctx.globalAlpha = Math.max(0, Math.min(1, this.fade_alpha));
-      ctx.drawImage(
-        sprite,
-        cx - (S * scale_x) / 2,
-        cy - (S * scale_y) / 2,
-        S * scale_x,
-        S * scale_y,
-      );
-      ctx.globalAlpha = 1;
-    } else {
-      const mc = this.current_monster ? this.current_monster.color : Config.POP_COLOR_WHITE;
-      ctx.fillStyle = rgba(mc, (mc[3] / 255) * this.fade_alpha);
-      ctx.fillRect(
-        cx - (S * scale_x) / 2,
-        cy - (S * scale_y) / 2,
-        S * scale_x,
-        S * scale_y,
-      );
-    }
+    const flash_alpha = this.hit_flash_timer > 0 ? (this.hit_flash_timer / 0.1) * 0.7 : 0;
+    for (const ox of offs) {
+      const hx = cx + ox;
+      if (sprite && ctx.drawImage) {
+        ctx.imageSmoothingEnabled = false;
+        ctx.globalAlpha = Math.max(0, Math.min(1, this.fade_alpha));
+        ctx.drawImage(
+          sprite,
+          hx - (S * scale_x) / 2,
+          cy - (S * scale_y) / 2,
+          S * scale_x,
+          S * scale_y,
+        );
+        ctx.globalAlpha = 1;
+      } else {
+        const mc = this.current_monster ? this.current_monster.color : Config.POP_COLOR_WHITE;
+        ctx.fillStyle = rgba(mc, (mc[3] / 255) * this.fade_alpha);
+        ctx.fillRect(
+          hx - (S * scale_x) / 2,
+          cy - (S * scale_y) / 2,
+          S * scale_x,
+          S * scale_y,
+        );
+      }
 
-    // Hit flash overlay
-    if (this.hit_flash_timer > 0) {
-      const flash_alpha = (this.hit_flash_timer / 0.1) * 0.7;
-      ctx.fillStyle = rgba([255, 255, 255], flash_alpha);
-      ctx.fillRect(cx - S / 2, cy - S / 2, S, S);
+      // Hit flash overlay rides every head in the pack.
+      if (flash_alpha > 0) {
+        ctx.fillStyle = rgba([255, 255, 255], flash_alpha);
+        ctx.fillRect(hx - S / 2, cy - S / 2, S, S);
+      }
     }
 
     // Crit flash (render white overlay)

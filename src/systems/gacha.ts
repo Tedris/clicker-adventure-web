@@ -1,5 +1,8 @@
 // src/systems/gacha.ts
-// Gacha/pull system with pity logic for waifu summoning.
+// Summon system with PS99-style guaranteed hatches: every paid pull yields a
+// waifu; rarity is a weighted roll that luck buffs tilt toward the top.
+// Common/rare hires come from the CURRENT area's pool (area flavor); epic
+// and legendary hires come from the shared cross-area pool.
 
 import Config, { type Rarity } from "../config";
 import type { GameState, WaifuInstance } from "../state";
@@ -27,68 +30,67 @@ export interface PullResult {
   waifu: WaifuInstance | null;
 }
 
-export interface DisplayInfo {
-  counter: number;
-  max: number;
-  threshold: "soft" | "hard" | null;
-  warning: boolean;
-}
-
 export class Gacha {
   private random: RandomFn;
 
   constructor(random: RandomFn = defaultRandom) {
     this.random = random;
     console.log(
-      `[INFO] [GACHA] Module loaded (soft pity=${Config.PITY_SOFT}, hard pity=${Config.PITY_HARD}, base rate=${Config.BASE_DROP_RATE})`,
+      `[INFO] [GACHA] Module loaded (guaranteed hatch, batch=${Config.BATCH_PULL_COUNT})`,
     );
   }
 
+  // Guaranteed hatch (PS99): paying always yields a waifu. The rarity walk
+  // decides HOW good; luck buffs tilt the walk toward the top tiers instead
+  // of gating the drop itself. A null return now only means "cannot pay".
   pull(state: GameState): PullResult | null {
     if (!state) throw new Error("Gacha:pull requires state table");
     if (typeof state.tokens !== "number" || state.tokens < Config.PULL_COST) {
       return null;
     }
     state.tokens = state.tokens - Config.PULL_COST;
-    // PS99 luck stack: earn-only buffs (rebirth tiers + mastery levels) bump
-    // the drop probability before the pity ladder. Rolls stay independent —
-    // luck raises the odds, it never makes a roll "due".
-    const probability = Math.min(
-      1,
-      this.get_probability(state.pity_counter ?? 0) * Mastery.luck_multiplier(state),
-    );
-    if (this.random() < probability) {
-      state.pity_counter = 0;
-      const def = this.get_random_waifu(state.area_index ?? 0);
-      if (!def) {
-        if (Config.DEBUG_MODE) {
-          console.log("[WARN] [GACHA] Pull succeeded but waifu pool returned nil");
-        }
-        return { success: false, waifu: null };
-      }
-      if (!state.waifus) state.waifus = [];
-      // The pool entry is a shared config def; the roster must own its copy
-      // with the rolled rarity baked into bonus_value (per-pull rarity tiers).
-      const instance = this.make_instance(def);
-      const first_time = !state.waifus.some((w) => w.name === instance.name);
-      state.waifus.push(instance);
+    const luck = Mastery.luck_multiplier(state);
+    const rarity = this.roll_rarity(luck);
+    const def = this.pick_hire(state.area_index ?? 0, rarity);
+    if (!def) {
       if (Config.DEBUG_MODE) {
-        console.log(
-          `[DEBUG] [GACHA] Pull success! Got: ${instance.name} [${instance.rarity}] (pity: ${state.pity_counter ?? 0}/100)`,
-        );
+        console.log("[WARN] [GACHA] Pull found no hire in the pools");
       }
-      // Record on the success path only, keyed off the rolled rarity; the
-      // miss branch and the empty-pool bail above never reach this line.
-      this.record_pull(state, instance.rarity, first_time);
-      return { success: true, waifu: instance };
+      return { success: false, waifu: null };
     }
-    state.pity_counter = Math.min((state.pity_counter ?? 0) + 1, Config.PITY_HARD);
+    if (!state.waifus) state.waifus = [];
+    // The pool entry is a shared config def; the roster must own its copy
+    // with the rolled rarity baked into bonus_value (per-pull rarity tiers).
+    const instance = this.make_instance(def, rarity);
+    const first_time = !state.waifus.some((w) => w.name === instance.name);
+    state.waifus.push(instance);
     if (Config.DEBUG_MODE) {
       console.log(
-        `[DEBUG] [GACHA] Pull failed (pity: ${state.pity_counter}/100, rate: ${probability})`,
+        `[DEBUG] [GACHA] Summon! Got: ${instance.name} [${instance.rarity}] (luck: ${luck.toFixed(2)})`,
       );
     }
-    return { success: false, waifu: null };
+    // Record keyed off the rolled rarity; every hatch feeds the mastery
+    // counters, which is what makes batch summoning a progression loop.
+    this.record_pull(state, instance.rarity, first_time);
+    return { success: true, waifu: instance };
+  }
+
+  // Name source per tier: commons/rares come from the CURRENT area's own
+  // hires so each area reads as its own hiring town; epics/legendaries come
+  // from the small shared pool that shows up everywhere.
+  pick_hire(area_index: number, rarity: Rarity): WaifuDef | null {
+    if (rarity.key === "epic" || rarity.key === "legendary") {
+      const shared = Config.WAIFU_POOL as WaifuDef[] | null;
+      if (!shared || shared.length === 0) return null;
+      return shared[this.random(shared.length) - 1] ?? null;
+    }
+    const idx = Math.max(0, Math.min(area_index, Config.AREAS.length - 1));
+    const names = Config.AREAS[idx].pool;
+    if (!names || names.length === 0) return null;
+    const name = names[this.random(names.length) - 1];
+    const bonus = Config.WAIFU_BONUS_BY_NAME[name];
+    if (!bonus) return null;
+    return { name, bonus_type: bonus.bonus_type, bonus_value: bonus.bonus_value };
   }
 
   // Batch summons (PS99 hatch rhythm): run `count` sequential pulls in one
@@ -107,24 +109,21 @@ export class Gacha {
     return found;
   }
 
-  get_probability(pity_counter?: number): number {
-    const counter = pity_counter ?? 0;
-    if (counter >= Config.PITY_HARD) return 1.0;
-    if (counter >= Config.PITY_SOFT) return Config.SOFT_PITY_RATE;
-    return Config.BASE_DROP_RATE;
-  }
-
-  // Cumulative-weight walk over Config.WAIFU_RARITIES (weights sum to 100).
-  // One random() call per roll so pull success consumes drop/pool/rarity
-  // in a fixed order (tests stub them positionally).
-  roll_rarity(): Rarity {
+  // Cumulative-weight walk over Config.WAIFU_RARITIES. Luck squeezes the
+  // COMMON band (the freed share is re-split across the ladder), so the same
+  // roll lands higher with buffs on — luck tilts quality, not the drop.
+  // Two random() calls per summon in a fixed order: rarity walk, hire pick.
+  roll_rarity(luck = 1): Rarity {
     const rarities = Config.WAIFU_RARITIES;
+    const weights = rarities.map((r, i) =>
+      i === 0 ? Math.max(1, r.weight / Math.max(1, luck)) : r.weight,
+    );
     let total = 0;
-    for (const r of rarities) total += r.weight;
+    for (const w of weights) total += w;
     let roll = this.random() * total;
-    for (const r of rarities) {
-      if (roll < r.weight) return r;
-      roll -= r.weight;
+    for (let i = 0; i < rarities.length; i++) {
+      if (roll < weights[i]) return rarities[i];
+      roll -= weights[i];
     }
     return rarities[rarities.length - 1];
   }
@@ -187,22 +186,6 @@ export class Gacha {
     }
   }
 
-  get_next_threshold(pity_counter?: number): "soft" | "hard" | null {
-    const counter = pity_counter ?? 0;
-    if (counter >= Config.PITY_HARD) return "hard";
-    if (counter >= Config.PITY_SOFT) return "soft";
-    return null;
-  }
-
-  get_display_info(pity_counter?: number): DisplayInfo {
-    const counter = pity_counter ?? 0;
-    return {
-      counter,
-      max: Config.PITY_HARD,
-      threshold: this.get_next_threshold(counter),
-      warning: counter >= 80,
-    };
-  }
 }
 
 export default Gacha;

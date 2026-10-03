@@ -268,7 +268,20 @@ export class MainScene {
       if (this.auto_accum >= Config.AUTO_KILL_TICK) {
         this.auto_accum = this.auto_accum % Config.AUTO_KILL_TICK;
         const allies = this.waifu.effective_assigned(state).length;
-        if (allies > 0) this.clicker.auto_tick(state, allies);
+        if (allies > 0) {
+          this.clicker.auto_tick(state, allies);
+          // Pets gather: with a crew on duty the ripe pickups pay themselves
+          // — coin piles, EXP orbs and the chest all flow without a tap.
+          const flags = this._pickup_flags(state);
+          const lanes = { coins: ["gold"], exp: ["exp"], chest: ["token"] } as const;
+          for (const key of ["coins", "exp", "chest"] as const) {
+            if (!flags[key]) continue;
+            const msg = Areas.harvest(state, key);
+            if (!msg) continue;
+            this.fire_event(msg, lanes[key]);
+            if (key !== "chest") this.pickup_cooldown[key] = Config.PICKUP_RESPAWN_SECONDS;
+          }
+        }
       }
     }
 
@@ -869,18 +882,13 @@ export class MainScene {
     this._text(ctx, `PULL (${Config.PULL_COST}T)`, b.pull.x, b.pull.y + 16, Config.POP_COLOR_WHITE,
       { align: "center", box: b.pull.w });
 
-    // Pity counter reads as the pull button's price tag, anchored next to it.
-    // Two stacked lines inside the fixed pity column so the luck note can
-    // never spill past the column and collide with the Stats button.
-    const pity_counter = state.pity_counter ?? 0;
-    const warning = pity_counter >= Config.PITY_SOFT;
-    this._text(ctx, `Pity: ${pity_counter}/${Config.PITY_HARD}${warning ? "!!!" : ""}`,
-      b.pity.x, b.pity.y + 8, warning ? Config.PITY_WARNING_COLOR : Config.PITY_NORMAL_COLOR);
+    // Summon-info column beside the Pull button: luck on top, mastery gold
+    // bonus underneath. Both are derived live and both fit the fixed column.
     const luck = Mastery.luck_multiplier(state);
-    if (luck > 1) {
-      this._text(ctx, `Luck ${luck.toFixed(2)}x`,
-        b.pity.x, b.pity.y + 26, Config.PITY_WARNING_COLOR);
-    }
+    this._text(ctx, `Luck ${luck.toFixed(2)}x`, b.pity.x, b.pity.y + 8,
+      luck > 1 ? Config.PITY_WARNING_COLOR : Config.PITY_NORMAL_COLOR);
+    const gold_pct = Math.round((Mastery.gold_multiplier(state) - 1) * 100);
+    this._text(ctx, `Gold +${gold_pct}%`, b.pity.x, b.pity.y + 26, Config.PITY_NORMAL_COLOR);
 
     // Stats entry: always-live info button (FEEL-02), static fill, same
     // Layout rect the hit-test reads.
@@ -1148,7 +1156,7 @@ export class MainScene {
       line(`Crits: ${crits} (${((crits / clicks) * 100).toFixed(1)}%)`);
     }
     line("Streak: Day " + (state.login_streak ?? 0));
-    line(`Pity: ${state.pity_counter ?? 0}/${Config.PITY_HARD}`);
+    line(`Summon luck: ${Mastery.luck_multiplier(state).toFixed(2)}x`);
     line("Time: " + format_session_time(state.session_start_time));
   }
 
@@ -1603,7 +1611,7 @@ export class MainScene {
     }
     const found = this.gacha.pull_many(state, Config.BATCH_PULL_COUNT);
     if (found.length === 0) {
-      this.pull_fail_message = `No summons... Pity: ${state.pity_counter ?? 0}/${Config.PITY_HARD}`;
+      this.pull_fail_message = `Nothing this time (${cost}T spent)`;
       this.pull_fail_timer = Config.PULL_FAIL_TOAST_LIFETIME;
     } else {
       this.fire_event(`Summoned x${found.length}: ${this._rarity_tally(found)}`, ["token"]);
@@ -1642,13 +1650,16 @@ export class MainScene {
       return true;
     }
 
-    // Monster hitbox centered on the stage, matching Clicker.draw.
+    // Monster pack hitbox: one wide box spanning the whole head row, sharing
+    // the offset math with Clicker.draw so every head is clickable.
     if (this.clicker) {
       const stage = this._zones().stage;
       const cx = stage.x + stage.w / 2 + this.clicker.pos_x;
       const cy = stage.y + stage.h / 2 + this.clicker.pos_y + this.clicker.idle_offset;
       const half = Config.MONSTER_SIZE / 2;
-      if (x >= cx - half && x <= cx + half && y >= cy - half && y <= cy + half) {
+      const offs = Layout.party_offsets(this.clicker.party_count, Config.MONSTER_SIZE * 2);
+      const half_x = half + offs[offs.length - 1];
+      if (x >= cx - half_x && x <= cx + half_x && y >= cy - half && y <= cy + half) {
         if (this.clicker.monster_state === "alive") {
           this.clicker.click(state);
           // D-09 click site: post-mutation, synchronously at the press.
@@ -1692,8 +1703,8 @@ export class MainScene {
             // in-screen "Pull Again" rides the update-tail sweep instead.
             this._check_unlocks();
           } else if (result) {
-            // A silent deduction would read as a dead button.
-            this.pull_fail_message = `No summon... Pity: ${state.pity_counter ?? 0}/${Config.PITY_HARD}`;
+            // An empty area pool should still read as "paid, nothing came".
+            this.pull_fail_message = `Nothing this time (${Config.PULL_COST}T spent)`;
             this.pull_fail_timer = Config.PULL_FAIL_TOAST_LIFETIME;
           }
         } else {

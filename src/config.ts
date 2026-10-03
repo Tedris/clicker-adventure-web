@@ -239,6 +239,8 @@ export const Config = {
   // the monster dies when its HP runs out. Later areas take more clicks per
   // kill; the milestone boss doubles its area's HP.
   AREA_MONSTER_HP: [1, 2, 4, 8, 16, 32],
+  // Fallback pack size when an area def carries no party count.
+  MONSTER_PARTY_FALLBACK: 2,
   // Assigned hires land this much automatic damage per second on the monster
   // (each ally contributes one click-damage worth per tick).
   AUTO_KILL_TICK: 1.0,
@@ -259,12 +261,12 @@ export const Config = {
   AREA_MENU_WIDTH: 340,
   AREA_MENU_HEIGHT: 250,
   AREAS: [
-    { name: "Cubicle", boss: "The Printer Jam", bg: [26, 26, 46, 255], monster: "mon_slime", pool: ["Karen the Accountant", "Steve the HR Rep", "Linda the Middle Manager"] },
-    { name: "Open Plan", boss: "The All-Hands", bg: [24, 32, 42, 255], monster: "mon_goblin", pool: ["Dave from IT", "Maya the Scrum Coach"] },
-    { name: "Break Room", boss: "The Expired Yogurt", bg: [30, 28, 38, 255], monster: "mon_skeleton", pool: ["Priya from Payroll", "Rosa the Barista", "Carl the Janitor"] },
-    { name: "Conference Room", boss: "The Meeting That Could Have Been an Email", bg: [28, 24, 36, 255], monster: "mon_cyclops", pool: ["Tina from Temp Agencies", "Councilwoman Diaz", "Chief of Staff Ana"] },
-    { name: "Copy Room", boss: "The Outdated Toner", bg: [22, 30, 34, 255], monster: "mon_mimic", pool: ["Gus from Facilities", "Hank the Truck Driver"] },
-    { name: "Corner Office", boss: "The Quarterly Close", bg: [36, 28, 26, 255], monster: "mon_cyclops", pool: ["Elaine the Night Manager", "Bob the Intern"] },
+    { name: "Cubicle", boss: "The Printer Jam", bg: [26, 26, 46, 255], monster: "mon_slime", party: 2, pool: ["Karen the Accountant", "Steve the HR Rep", "Linda the Middle Manager"] },
+    { name: "Open Plan", boss: "The All-Hands", bg: [24, 32, 42, 255], monster: "mon_goblin", party: 3, pool: ["Dave from IT", "Maya the Scrum Coach"] },
+    { name: "Break Room", boss: "The Expired Yogurt", bg: [30, 28, 38, 255], monster: "mon_skeleton", party: 3, pool: ["Priya from Payroll", "Rosa the Barista", "Carl the Janitor"] },
+    { name: "Conference Room", boss: "The Meeting That Could Have Been an Email", bg: [28, 24, 36, 255], monster: "mon_cyclops", party: 4, pool: ["Tina from Temp Agencies", "Councilwoman Diaz", "Chief of Staff Ana"] },
+    { name: "Copy Room", boss: "The Outdated Toner", bg: [22, 30, 34, 255], monster: "mon_mimic", party: 4, pool: ["Gus from Facilities", "Hank the Truck Driver"] },
+    { name: "Corner Office", boss: "The Quarterly Close", bg: [36, 28, 26, 255], monster: "mon_cyclops", party: 5, pool: ["Elaine the Night Manager", "Bob the Intern"] },
   ] as AreaDef[],
 
   // Bonus defs for every waifu name across all area pools (area 1 names are
@@ -628,6 +630,7 @@ export interface AreaDef {
   boss: string;
   bg: readonly number[];
   monster: string;
+  party?: number;
   pool: readonly string[];
 }
 

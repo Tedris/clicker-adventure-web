@@ -230,8 +230,8 @@ export class PullScreen {
     if (result && result.success && result.waifu) {
       this.pulled_waifu = result.waifu;
     } else {
-      // A re-pull can miss (BASE_DROP_RATE is 2%). Must NOT fall back to
-      // the last roster waifu: that replays the previous summon.
+      // Empty-pool edge only. Must NOT fall back to the last roster waifu:
+      // that replays the previous summon.
       this.pulled_waifu = null;
     }
 
@@ -369,14 +369,14 @@ export class PullScreen {
       this._draw_button(ctx, "Done", g.done, true);
     }
 
-    // Missed re-pull (2% drop rate): show the miss note in place of the
-    // waifu and keep both buttons live, or the overlay would sit there with
-    // nothing to click. Text mirrors the main-scene pull-fail toast.
+    // Empty-pool edge (a hire list with no entries): show the note in place
+    // of the waifu and keep both buttons live, or the overlay would sit there
+    // with nothing to click. Text mirrors the main-scene pull-fail toast.
     if (this.revealed && !this.pulled_waifu) {
       const iw = Math.min(320, width - 2 * Config.LAYOUT_MARGIN);
       const luck = Mastery.luck_multiplier(this.state);
       const luck_note = luck > 1 ? ` Luck ${luck.toFixed(2)}x` : "";
-      this._center_text(ctx, `No summon... Pity: ${this.state.pity_counter ?? 0}/${Config.PITY_HARD}${luck_note}`,
+      this._center_text(ctx, `Nothing this time (${Config.PULL_COST}T spent)${luck_note}`,
         cx - iw / 2, cy - 8, iw);
       const can_again = (this.state.tokens ?? 0) >= Config.PULL_COST;
       this._draw_button(ctx, "Pull Again" + (can_again ? "" : ` (${Config.PULL_COST}T)`), g.pull_again, can_again);

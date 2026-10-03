@@ -32,11 +32,11 @@ export class Mastery {
     return 1 + Config.MASTERY_GOLD_PER_LEVEL * Mastery.total_levels(state);
   }
 
-  // Luck multiplier for the gacha odds (PS99 gamepass shape, earn-only):
+  // Luck multiplier for summon quality (PS99 gamepass shape, earn-only):
   // each named buff unlocks at its rebirth tier and MULTIPLIES in, so the
   // high-end ladder feels like a premium bundle bought with time instead of
   // money. Mastery levels contribute a smaller additive share on top.
-  // Applied as a bump on the pull probability; pity stays independent.
+  // Applied as a tilt on the rarity walk; the hatch itself is guaranteed.
   static luck_multiplier(state: MasteryState): number {
     const rebirths = Math.max(0, state?.prestige_rebirths ?? 0);
     let mult = 1;
