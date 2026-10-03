@@ -216,6 +216,9 @@ export const Config = {
   BASE_DROP_RATE: 0.05,
   SOFT_PITY_RATE: 0.10,
   PULL_COST: 10,
+  // Batch summons (PS99 hatch-batch rhythm): one tap runs this many pulls,
+  // each counting into the Pulls mastery ladder.
+  BATCH_PULL_COUNT: 5,
   WAIFU_POOL: [
     { name: "Karen the Accountant", bonus_type: "tokens", bonus_value: 0.10 },
     { name: "Steve the HR Rep", bonus_type: "gold", bonus_value: 0.05 },

@@ -91,25 +91,20 @@ export class Gacha {
     return { success: false, waifu: null };
   }
 
-  // Free hire from the CURRENT area's pool, paid by a harvested Treasure
-  // Chest (PS99 chest loop): the rarity roll is exactly the pull one, but
-  // pity is untouched - the chest already cost the area's gold meter.
-  hire_from_pool(state: GameState): WaifuInstance | null {
-    if (!state) throw new Error("Gacha:hire_from_pool requires state table");
-    const idx = Math.max(0, Math.min(state.area_index ?? 0, Config.AREAS.length - 1));
-    const pool = Config.AREAS[idx].pool;
-    if (pool.length === 0) return null;
-    const name = pool[this.random(pool.length) - 1];
-    const bonus = Config.WAIFU_BONUS_BY_NAME[name];
-    if (!bonus) return null;
-    const instance = this.make_instance({
-      name, bonus_type: bonus.bonus_type, bonus_value: bonus.bonus_value,
-    });
-    if (!state.waifus) state.waifus = [];
-    const first_time = !state.waifus.some((w) => w.name === instance.name);
-    state.waifus.push(instance);
-    this.record_pull(state, instance.rarity, first_time);
-    return instance;
+  // Batch summons (PS99 hatch rhythm): run `count` sequential pulls in one
+  // tap. Every pull pays PULL_COST, rides the shared pity counter, and lands
+  // in the mastery counters through pull() itself. Stops early when tokens
+  // run out; returns the successful instances.
+  pull_many(state: GameState, count?: number): WaifuInstance[] {
+    if (!state) throw new Error("Gacha:pull_many requires state table");
+    const n = Math.max(1, count ?? Config.BATCH_PULL_COUNT);
+    const found: WaifuInstance[] = [];
+    for (let i = 0; i < n; i++) {
+      const result = this.pull(state);
+      if (!result) break;
+      if (result.success && result.waifu) found.push(result.waifu);
+    }
+    return found;
   }
 
   get_probability(pity_counter?: number): number {

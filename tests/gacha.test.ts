@@ -430,33 +430,36 @@ describe("Luck stack on the drop roll", () => {
   });
 });
 
-describe("hire_from_pool (chest hires)", () => {
-  function hireRng(poolIdx: number, rarityRoll: number): RandomFn {
-    const values = [poolIdx, rarityRoll];
-    let i = 0;
-    return () => values[i++ % values.length];
+describe("pull_many (batch summons)", () => {
+  // Hard pity makes every pull succeed, so the batch shape - not the roll -
+  // is what these tests measure. Indexed calls still hand back a valid slot.
+  function alwaysHit(max?: number): number {
+    // Argless rolls sit under the base rate so every pull in the batch
+    // succeeds regardless of where the shared pity sits.
+    if (max === undefined) return 0.01;
+    return Math.floor(max / 2) + 1;
   }
 
-  it("hires from the CURRENT area's pool without touching tokens", () => {
-    const state = st({ tokens: 3, pity_counter: 7, waifus: [], area_index: 1, stats: {} });
-    const hire = new Gacha(hireRng(1, 0.5)).hire_from_pool(state)!;
-    expect(Config.AREAS[1].pool.includes(hire.name)).toBe(true);
-    expect(hire.bonus_value > 0).toBe(true);
-    expect(state.waifus.length).toBe(1);
-    expect(state.tokens).toBe(3); // a chest hire is not a token pull
-    expect(state.pity_counter).toBe(7); // and it never moves pity
-    expect(state.stats.pulls_total).toBe(1);
+  it("runs count pulls on the shared pity, paying each one", () => {
+    const state = st({ tokens: Config.PULL_COST * 3 + 5, pity_counter: 100, waifus: [], stats: {} });
+    const found = new Gacha(alwaysHit).pull_many(state, 3);
+    expect(found.length).toBe(3);
+    expect(state.waifus.length).toBe(3);
+    expect(state.tokens).toBe(5);
+    expect(state.pity_counter).toBe(0); // first success already reset it
+    expect(state.stats.pulls_total).toBe(3); // batch feeds the mastery ladder
   });
 
-  it("counts a duplicate hire without a unique bump", () => {
-    const first = Config.AREAS[0].pool[0];
-    const state = st({
-      tokens: 0, pity_counter: 0, stats: {}, area_index: 0,
-      waifus: [{ name: first, bonus_type: "gold", bonus_value: 0.05, rarity: "common" }],
-    });
-    const hire = new Gacha(hireRng(1, 0.5)).hire_from_pool(state)!;
-    expect(hire.name).toBe(first);
-    expect(state.stats.unique_hires).toBeUndefined();
-    expect(state.stats.pulls_total).toBe(1);
+  it("stops early when tokens run out mid-batch", () => {
+    const state = st({ tokens: Config.PULL_COST * 2, pity_counter: 100, waifus: [], stats: {} });
+    const found = new Gacha(alwaysHit).pull_many(state, 5);
+    expect(found.length).toBe(2);
+    expect(state.tokens).toBe(0);
+  });
+
+  it("returns nothing when the batch cannot pay for its first pull", () => {
+    const state = st({ tokens: Config.PULL_COST - 1, pity_counter: 7, waifus: [], stats: {} });
+    expect(new Gacha(alwaysHit).pull_many(state, 5)).toEqual([]);
+    expect(state.pity_counter).toBe(7); // unpaid pulls never move pity
   });
 });

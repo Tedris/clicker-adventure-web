@@ -23,7 +23,7 @@ import type { Debug } from "../systems/debug";
 import type { Gacha } from "../systems/gacha";
 import type { Waifu } from "../systems/waifu";
 import type { Save } from "../systems/save";
-import type { GameState } from "../state";
+import type { GameState, WaifuInstance } from "../state";
 import PullScreen from "./pull_screen";
 
 // PREST-02: PERSIST_SCHEME key -> short human label for the prestige panel's
@@ -901,6 +901,15 @@ export class MainScene {
     this._text(ctx, this._fit_text(ctx, "DBG", b.dbg.w), b.dbg.x,
       b.dbg.y + Math.floor((Config.TOGGLE_BTN_HEIGHT - Config.FONT_SIZE) / 2), Config.POP_COLOR_WHITE,
       { align: "center", box: b.dbg.w });
+    // Batch summon button (PS99 hatch rhythm): one tap, BATCH_PULL_COUNT pulls,
+    // each feeding the Pulls mastery ladder.
+    const batch_cost = Config.PULL_COST * Config.BATCH_PULL_COUNT;
+    const batch_ready = this.gacha !== null && (state.tokens ?? 0) >= batch_cost;
+    ctx.fillStyle = rgba(batch_ready ? Config.PULL_BTN_COLOR : Config.PULL_BTN_DISABLED_COLOR);
+    ctx.fillRect(b.batch.x, b.batch.y, b.batch.w, b.batch.h);
+    this._text(ctx, this._fit_text(ctx, `x${Config.BATCH_PULL_COUNT}`, b.batch.w), b.batch.x,
+      b.batch.y + Math.floor((Config.TOGGLE_BTN_HEIGHT - Config.FONT_SIZE) / 2), Config.POP_COLOR_WHITE,
+      { align: "center", box: b.batch.w });
 
     // Prestige button: enabled only when a rebirth point is earnable.
     const prestige_enabled = Prestige.earnable_points(state) >= 1;
@@ -1567,14 +1576,11 @@ export class MainScene {
       const s = spots[key];
       if (x >= s.x && x <= s.x + s.w && y >= s.y && y <= s.y + s.h) {
         if (state && this._pickup_flags(state)[key]) {
+          // Chests pay tokens and unlock the next area; hires come from the
+          // summon lane (single pull or the x5 batch button).
           const msg = Areas.harvest(state, key);
           if (msg) {
-            let text = msg;
-            if (key === "chest" && this.gacha) {
-              const hire = this.gacha.hire_from_pool(state);
-              if (hire) text = `${msg} · Hire: ${hire.name} (${hire.rarity})`;
-            }
-            this.fire_event(text, lanes[key]);
+            this.fire_event(msg, lanes[key]);
             if (key !== "chest") this.pickup_cooldown[key] = Config.PICKUP_RESPAWN_SECONDS;
           }
         }
@@ -1583,6 +1589,38 @@ export class MainScene {
     }
     if (this._click_at(x, y)) return true;
     return false;
+  }
+
+  // Batch summons (PS99 hatch rhythm): one tap, BATCH_PULL_COUNT pulls on the
+  // shared pity counter - each one also feeds the Pulls mastery ladder.
+  private _batch_summon(state: GameState | null): void {
+    if (!this.gacha || !state) return;
+    const cost = Config.PULL_COST * Config.BATCH_PULL_COUNT;
+    if ((state.tokens ?? 0) < cost) {
+      this.pull_fail_message = `Need ${cost} tokens to summon x${Config.BATCH_PULL_COUNT}`;
+      this.pull_fail_timer = Config.PULL_FAIL_TOAST_LIFETIME;
+      return;
+    }
+    const found = this.gacha.pull_many(state, Config.BATCH_PULL_COUNT);
+    if (found.length === 0) {
+      this.pull_fail_message = `No summons... Pity: ${state.pity_counter ?? 0}/${Config.PITY_HARD}`;
+      this.pull_fail_timer = Config.PULL_FAIL_TOAST_LIFETIME;
+    } else {
+      this.fire_event(`Summoned x${found.length}: ${this._rarity_tally(found)}`, ["token"]);
+      this._check_unlocks();
+    }
+  }
+
+  // Rarity tally in ladder order, e.g. "1 Epic, 4 Common".
+  private _rarity_tally(found: WaifuInstance[]): string {
+    const counts = new Map<string, number>();
+    for (const w of found) counts.set(w.rarity, (counts.get(w.rarity) ?? 0) + 1);
+    const parts: string[] = [];
+    for (const r of Config.WAIFU_RARITIES) {
+      const n = counts.get(r.key);
+      if (n) parts.push(`${n} ${r.name}`);
+    }
+    return parts.join(", ");
   }
 
   // Gameplay hit-test body: reset arm/disarm, roster cards, monster hitbox
@@ -1632,6 +1670,10 @@ export class MainScene {
     }
     if (y >= b.sess.y && y <= b.sess.y + b.sess.h && x >= b.sess.x && x <= b.sess.x + b.sess.w) {
       this.show_session_stats = !this.show_session_stats;
+      return true;
+    }
+    if (y >= b.batch.y && y <= b.batch.y + b.batch.h && x >= b.batch.x && x <= b.batch.x + b.batch.w) {
+      this._batch_summon(state);
       return true;
     }
 

@@ -127,6 +127,31 @@ describe("MainScene.mousepressed", () => {
     expect(scene.showing_pull_screen).toBe(false);
   });
 
+  it("the x5 batch pays per pull and fills the roster in one tap", () => {
+    const state = createState();
+    state.tokens = Config.PULL_COST * Config.BATCH_PULL_COUNT;
+    const scene = make_scene(state);
+    scene.load(state);
+    const b = Layout.bar_items(Config.WINDOW_WIDTH, Config.WINDOW_HEIGHT);
+    scene.mousepressed(b.batch.x + b.batch.w / 2, b.batch.y + b.batch.h / 2);
+    expect(state.waifus.length).toBe(Config.BATCH_PULL_COUNT);
+    expect(state.stats.pulls_total).toBe(Config.BATCH_PULL_COUNT);
+    expect(scene.showing_pull_screen).toBe(false);
+  });
+
+  it("a broke batch names its total price in the fail lane", () => {
+    const state = createState();
+    state.tokens = Config.PULL_COST * Config.BATCH_PULL_COUNT - 1;
+    const scene = make_scene(state);
+    scene.load(state);
+    const b = Layout.bar_items(Config.WINDOW_WIDTH, Config.WINDOW_HEIGHT);
+    scene.mousepressed(b.batch.x + b.batch.w / 2, b.batch.y + b.batch.h / 2);
+    expect(scene.pull_fail_message).toContain(
+      String(Config.PULL_COST * Config.BATCH_PULL_COUNT),
+    );
+    expect(state.waifus.length).toBe(0);
+  });
+
   it("the first reset click arms, a click elsewhere disarms, two clicks reset", () => {
     const state = createState();
     state.gold = 10;
