@@ -870,12 +870,17 @@ export class MainScene {
       { align: "center", box: b.pull.w });
 
     // Pity counter reads as the pull button's price tag, anchored next to it.
+    // Two stacked lines inside the fixed pity column so the luck note can
+    // never spill past the column and collide with the Stats button.
     const pity_counter = state.pity_counter ?? 0;
     const warning = pity_counter >= Config.PITY_SOFT;
+    this._text(ctx, `Pity: ${pity_counter}/${Config.PITY_HARD}${warning ? "!!!" : ""}`,
+      b.pity.x, b.pity.y + 8, warning ? Config.PITY_WARNING_COLOR : Config.PITY_NORMAL_COLOR);
     const luck = Mastery.luck_multiplier(state);
-    const luck_note = luck > 1 ? ` Luck ${luck.toFixed(2)}x` : "";
-    this._text(ctx, `Pity: ${pity_counter}/${Config.PITY_HARD}${warning ? "!!!" : ""}${luck_note}`,
-      b.pity.x, b.pity.y + 16, warning ? Config.PITY_WARNING_COLOR : Config.PITY_NORMAL_COLOR);
+    if (luck > 1) {
+      this._text(ctx, `Luck ${luck.toFixed(2)}x`,
+        b.pity.x, b.pity.y + 26, Config.PITY_WARNING_COLOR);
+    }
 
     // Stats entry: always-live info button (FEEL-02), static fill, same
     // Layout rect the hit-test reads.
