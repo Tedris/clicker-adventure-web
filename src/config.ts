@@ -205,7 +205,7 @@ export const Config = {
   // Skills modal (upgrade lattice): centered panel, chip-row maxima.
   SKILLS_PANEL_WIDTH: 460,
   SKILLS_PANEL_HEIGHT: 300,
-  SKILLS_CHIP_HEIGHT: 46,
+  SKILLS_CHIP_HEIGHT: 64,
   SKILLS_CHIP_GAP: 14,
   UPGRADE_BUY_BTN_COLOR: [240, 200, 80, 255],
   UPGRADE_DISABLED_COLOR: [108, 108, 128, 255],

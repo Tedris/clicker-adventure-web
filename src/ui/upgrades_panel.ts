@@ -27,6 +27,10 @@ function rgba(c: readonly number[], alpha?: number): string {
   return `rgba(${Math.round(c[0])}, ${Math.round(c[1])}, ${Math.round(c[2])}, ${a})`;
 }
 
+// House text idiom (mirrors MainScene._text): `box` is a layout box starting
+// at x; center/right alignment offsets INTO the box, and overflow truncates
+// to "<head>.." at measured width. Without this the glyphs center on the box
+// origin and spill past the element's left edge.
 function draw_text(
   ctx: CanvasRenderingContext2D,
   s: string,
@@ -35,11 +39,21 @@ function draw_text(
   color: readonly number[],
   opts?: { size?: number; align?: "center"; box?: number },
 ): void {
+  const size = opts?.size ?? Config.FONT_SIZE;
+  ctx.font = `${size}px sans-serif`;
+  let text = s;
+  const box = opts?.box ?? 0;
+  if (box > 0 && ctx.measureText(text).width > box) {
+    while (text.length > 1 && ctx.measureText(text + "..").width > box) {
+      text = text.slice(0, -1);
+    }
+    text = text + "..";
+  }
   ctx.fillStyle = rgba(color);
-  ctx.font = `${opts?.size ?? Config.FONT_SIZE}px sans-serif`;
   ctx.textAlign = opts?.align ?? "left";
   ctx.textBaseline = "top";
-  ctx.fillText(s, Math.round(x), Math.round(y), opts?.box);
+  const tx = opts?.align === "center" ? x + box / 2 : x;
+  ctx.fillText(text, Math.round(tx), Math.round(y));
 }
 
 export class UpgradePanel {
@@ -173,18 +187,15 @@ export class UpgradePanel {
     const cue = this._target_cue(state);
     const selected = this.selected_key();
 
-    // Connectors first so chips sit on top of the chain line.
+    // The chain line runs through the node circles' centers (drawn first, so
+    // the circles sit on top of it like a real skill tree).
     ctx.strokeStyle = rgba([158, 158, 178, 255], 0.5);
     ctx.lineWidth = 2;
-    for (let i = 1; i < p.chips.length; i++) {
-      const a = p.chips[i - 1];
-      const b = p.chips[i];
-      const mid_y = a.y + Math.floor(a.h / 2);
-      ctx.beginPath();
-      ctx.moveTo(a.x + a.w, mid_y);
-      ctx.lineTo(b.x, mid_y);
-      ctx.stroke();
-    }
+    const line_y = p.chips[0].y + Math.min(p.chips[0].w - 4, 34) / 2;
+    ctx.beginPath();
+    ctx.moveTo(p.chips[0].x + p.chips[0].w / 2, line_y);
+    ctx.lineTo(p.chips[p.chips.length - 1].x + p.chips[p.chips.length - 1].w / 2, line_y);
+    ctx.stroke();
     ctx.lineWidth = 1;
 
     for (let i = 0; i < this.keys.length; i++) {
@@ -209,38 +220,56 @@ export class UpgradePanel {
     const maxed = this.upgrades.is_maxed(key);
     const unlocked = this.upgrades.is_unlocked(key);
 
+    // Tree node: a circular badge on the connector line, name + level below.
+    const cx = c.x + c.w / 2;
+    const d = Math.min(c.w - 4, 34);
+    const cy = c.y + d / 2;
+
     if (cue && cue.key === key && cue.kind === "afford") {
       const glow = 0.25 + 0.15 * Math.sin(this.cue_pulse * 4);
       ctx.fillStyle = rgba(def.color, glow);
-      ctx.fillRect(c.x - 2, c.y - 2, c.w + 4, c.h + 4);
+      ctx.beginPath();
+      ctx.arc(cx, cy, d / 2 + 3, 0, Math.PI * 2);
+      ctx.fill();
     }
 
-    if (!unlocked) {
-      ctx.fillStyle = rgba(Config.UPGRADE_DISABLED_COLOR, 0.5);
-    } else {
-      ctx.fillStyle = rgba(def.color, maxed ? 0.95 : 0.8);
-    }
-    ctx.fillRect(c.x, c.y, c.w, c.h);
+    ctx.fillStyle = rgba(unlocked ? def.color : Config.UPGRADE_DISABLED_COLOR,
+      maxed ? 0.95 : unlocked ? 0.85 : 0.5);
+    ctx.beginPath();
+    ctx.arc(cx, cy, d / 2, 0, Math.PI * 2);
+    ctx.fill();
 
     if (key === selected) {
       ctx.strokeStyle = rgba(Config.POP_COLOR_WHITE);
       ctx.lineWidth = 2;
-      ctx.strokeRect(c.x, c.y, c.w, c.h);
+      ctx.beginPath();
+      ctx.arc(cx, cy, d / 2 + 1, 0, Math.PI * 2);
+      ctx.stroke();
       ctx.lineWidth = 1;
     }
 
     const flash = this.purchase_animations[key];
     if (flash && flash > 0) {
       ctx.fillStyle = rgba(def.color, (flash / 0.3) * 0.5);
-      ctx.fillRect(c.x - 2, c.y - 2, c.w + 4, c.h + 4);
+      ctx.beginPath();
+      ctx.arc(cx, cy, d / 2 + 2, 0, Math.PI * 2);
+      ctx.fill();
     }
 
-    const icon_y = c.y + 6;
-    draw_text(ctx, def.icon, c.x, icon_y, Config.POP_COLOR_WHITE,
-      { size: Config.FONT_SIZE * 1.5, align: "center", box: c.w });
-    const lv_text = maxed ? "MAX" : `${Format.number(level)}`;
-    draw_text(ctx, lv_text, c.x, c.y + c.h - Config.FONT_SIZE - 6,
-      unlocked ? Config.POP_COLOR_WHITE : Config.OFFLINE_REPORT_HINT_COLOR,
+    // Icon glyph centered inside the circle.
+    ctx.font = `${Config.FONT_SIZE * 1.5}px sans-serif`;
+    ctx.fillStyle = rgba(Config.POP_COLOR_WHITE);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(def.icon, Math.round(cx), Math.round(cy) + 1);
+    ctx.textBaseline = "top";
+
+    const name_y = c.y + d + 4;
+    draw_text(ctx, def.name, c.x, name_y, unlocked ? Config.POP_COLOR_WHITE : Config.OFFLINE_REPORT_HINT_COLOR,
+      { align: "center", box: c.w });
+    const lv_text = maxed ? "MAX" : `Lv${Format.number(level)}`;
+    draw_text(ctx, lv_text, c.x, name_y + Config.FONT_SIZE + 3,
+      unlocked ? Config.OFFLINE_REPORT_HINT_COLOR : Config.UPGRADE_DISABLED_COLOR,
       { align: "center", box: c.w });
   }
 
